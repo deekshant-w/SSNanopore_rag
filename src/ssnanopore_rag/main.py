@@ -1,16 +1,15 @@
-from src.dataLoader import (
+from ssnanopore_rag.dataLoader import (
     Paper,
     parse_ris_data,
     convert_ris_data_to_entities,
     make_data,
 )
-from src.embeddings import (
+from ssnanopore_rag.embeddings import (
     EmbeddingService,
     BioBERT,
     Specter2,
     GoogleEmbeddings,
 )
-
 
 
 def main():
