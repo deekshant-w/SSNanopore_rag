@@ -12,6 +12,7 @@ dependencies = [
     "hf-xet>=1.5.0",
     "pinecone>=9.0.1",
     "pydantic>=2.13.4",
+    "qdrant-client>=1.18.0",
     "rispy>=0.10.0",
     "snowballstemmer>=3.1.0",
     "torch>=2.12.0",
@@ -20,7 +21,8 @@ dependencies = [
 ]
 
 [project.scripts]
-ssnanopore-rag = "ssnanopore_rag.main:main"
+main = "ssnanopore_rag.main:main"
+check = "ssnanopore_rag.embeddingStore:main"
 
 [build-system]
 requires = ["hatchling"]
