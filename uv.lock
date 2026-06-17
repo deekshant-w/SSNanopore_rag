@@ -2408,7 +2408,7 @@ requires-dist = [
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "google-genai", specifier = ">=2.6.0" },
     { name = "hf-xet", specifier = ">=1.5.0" },
-    { name = "pinecone", specifier = ">=9.0.1" },
+    { name = "pinecone", extras = ["grpc"], specifier = ">=9.0.1" },
     { name = "pydantic", specifier = ">=2.13.4" },
     { name = "qdrant-client", specifier = ">=1.18.0" },
     { name = "rispy", specifier = ">=0.10.0" },
