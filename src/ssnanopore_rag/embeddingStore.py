@@ -9,7 +9,8 @@ from pinecone import ServerlessSpec
 import time
 from pinecone.grpc import PineconeGRPC as Pinecone
 from qdrant_client import QdrantClient
-
+from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import PointStruct
 logger = logging.getLogger(__name__)
 PROJECT_DIR = Path(__file__).parent.parent.parent
 
@@ -143,7 +144,51 @@ class PineconeStore:
 
 
 class QdrantStore:
-    def __init__(): ...
+    def __init__(
+        self,
+        db_name: str = "chroma",
+        collection_name: str = "nanopore",
+        embedding_function: Optional[Callable] = None,
+        vector_size: int = 128,
+        metric: str = Distance.COSINE,
+    ):
+        # client = QdrantClient(path=PROJECT_DIR / "data" / db_name)
+        self.client = QdrantClient(":memory:")
+        # client = QdrantClient(host="localhost", port=6333)
+        self.client.create_collection(
+            collection_name,
+            vectors_config=VectorParams(size=vector_size, distance=metric)
+        )
+        self.embedding_function = embedding_function
+        self.collection_name = collection_name
+
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        embeddings = self.embedding_function(documents)
+        points = [
+            PointStruct(
+                id=ids[i],
+                vector=embeddings[i],
+                payload=metadata[i],
+            )
+            for i in range(len(embeddings))
+        ]
+        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        logger.info(f"Upsert operation completed: {operation_info}")
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        query_embeddings = self.embedding_function(query_texts)
+        return self.client.query_points(
+            collection_name = self.collection_name,
+            query = query_embeddings[0],
+            limit = n_results,
+            with_payload = True,
+        )
+
 
 
 def _chroma():
@@ -167,6 +212,19 @@ def _pinecone():
     )
     store.add_embeddings(
         ids=["good", "bad"],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
+def main():
+    from .embeddings import GoogleEmbeddings as embeddingService
+
+    store = QdrantStore(embedding_function=embeddingService().getEmbeddings, vector_size=128)
+    store.add_embeddings(
+        ids=[0,1],
         documents=["what is DNA sequencing?", "what is CRISPR?"],
         metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
     )
