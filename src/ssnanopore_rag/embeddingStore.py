@@ -180,6 +180,7 @@ class PineconeStore_Sparse(LocalPineconeStore):
         pinecone_args: Mapping[str, Any] = {},
         index_args: Mapping[str, Any] = {},
     ) -> None:
+        raise NotImplementedError("Sparse encoding in Pinecone is not working - https://github.com/pinecone-io/python-sdk/issues/679")
         self.embedding_function = embedding_function
         self.index_name = index_name
         self.metric = metric
