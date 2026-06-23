@@ -182,7 +182,6 @@ class PineconeStore_Sparse(LocalPineconeStore):
     ) -> None:
         self.embedding_function = embedding_function
         self.index_name = index_name
-        self.vector_type = "sparse"
         self.metric = metric
         self.index_args = index_args
         self.namespace = namespace
@@ -195,6 +194,7 @@ class PineconeStore_Sparse(LocalPineconeStore):
             self.pc.indexes.create(
                 name=self.index_name,
                 vector_type="sparse",
+                dimension=1,
                 metric=self.metric,
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
                 **self.index_args,
