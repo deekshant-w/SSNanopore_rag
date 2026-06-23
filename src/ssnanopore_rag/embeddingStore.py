@@ -13,6 +13,7 @@ from pinecone import ServerlessSpec
 import time
 from pinecone.grpc import PineconeGRPC as Pinecone
 from qdrant_client import QdrantClient
+from qdrant_client import models
 from qdrant_client.models import Distance, VectorParams
 from qdrant_client.models import PointStruct
 logger = logging.getLogger(__name__)
@@ -231,24 +232,40 @@ class PineconeStore_Sparse(LocalPineconeStore):
 
 
 
-class QdrantStore(EmbeddingStore):
+class LocalQdrantStore(EmbeddingStore):
+    def __init__(self, collection_name: str = "nanopore") -> None:
+        logger.info("Initializing %s", type(self).__name__)
+        # client = QdrantClient(path=PROJECT_DIR / "data" / db_name)
+        # client = QdrantClient(host="localhost", port=6333)
+        self.client = QdrantClient(":memory:")
+        self.collection_name = collection_name
+        self.init_collection()
+        logger.info("%s initialized", type(self).__name__)
+
+    @abstractmethod
+    def init_collection(self) -> None:
+        """Create the Qdrant collection with the right vector configuration."""
+        pass
+
+
+class QdrantStore_Dense(LocalQdrantStore):
     def __init__(
         self,
-        db_name: str = "chroma",
+        embedding_function: Callable,
         collection_name: str = "nanopore",
-        embedding_function: Optional[Callable] = None,
         vector_size: int = 128,
         metric: str = Distance.COSINE,
-    ):
-        # client = QdrantClient(path=PROJECT_DIR / "data" / db_name)
-        self.client = QdrantClient(":memory:")
-        # client = QdrantClient(host="localhost", port=6333)
-        self.client.create_collection(
-            collection_name,
-            vectors_config=VectorParams(size=vector_size, distance=metric)
-        )
+    ) -> None:
         self.embedding_function = embedding_function
-        self.collection_name = collection_name
+        self.vector_size = vector_size
+        self.metric = metric
+        super().__init__(collection_name=collection_name)
+
+    def init_collection(self) -> None:
+        self.client.create_collection(
+            self.collection_name,
+            vectors_config=VectorParams(size=self.vector_size, distance=self.metric),
+        )
 
     def add_embeddings(
         self,
@@ -271,12 +288,300 @@ class QdrantStore(EmbeddingStore):
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         query_embeddings = self.embedding_function(query_texts)
         return self.client.query_points(
-            collection_name = self.collection_name,
-            query = query_embeddings[0],
-            limit = n_results,
-            with_payload = True,
+            collection_name=self.collection_name,
+            query=query_embeddings[0],
+            limit=n_results,
+            with_payload=True,
         )
 
+
+class QdrantStore_Sparse(LocalQdrantStore):
+    def __init__(
+        self,
+        embedding_function: Callable,
+        collection_name: str = "nanopore",
+    ) -> None:
+        self.embedding_function = embedding_function
+        super().__init__(collection_name=collection_name)
+
+    def init_collection(self) -> None:
+        self.client.create_collection(
+            self.collection_name,
+            vectors_config={},
+            sparse_vectors_config={"sparse": models.SparseVectorParams()},
+        )
+
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        embeddings = self.embedding_function(documents)
+        points = [
+            PointStruct(
+                id=ids[i],
+                vector={
+                    "sparse": models.SparseVector(
+                        indices=embeddings[i]["indices"],
+                        values=embeddings[i]["values"],
+                    )
+                },
+                payload=metadata[i],
+            )
+            for i in range(len(embeddings))
+        ]
+        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        logger.info(f"Upsert operation completed: {operation_info}")
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        query_embedding = self.embedding_function(query_texts)[0]
+        return self.client.query_points(
+            collection_name=self.collection_name,
+            query=models.SparseVector(
+                indices=query_embedding["indices"],
+                values=query_embedding["values"],
+            ),
+            using="sparse",
+            limit=n_results,
+            with_payload=True,
+        )
+
+
+class QdrantStore_Hybrid(LocalQdrantStore):
+    def __init__(
+        self,
+        dense_embedding_function: Callable,
+        sparse_embedding_function: Callable,
+        collection_name: str = "nanopore",
+        vector_size: int = 128,
+        metric: str = Distance.COSINE,
+    ) -> None:
+        self.dense_embedding_function = dense_embedding_function
+        self.sparse_embedding_function = sparse_embedding_function
+        self.vector_size = vector_size
+        self.metric = metric
+        super().__init__(collection_name=collection_name)
+
+    def init_collection(self) -> None:
+        self.client.create_collection(
+            self.collection_name,
+            vectors_config={
+                "dense": VectorParams(size=self.vector_size, distance=self.metric)
+            },
+            sparse_vectors_config={"sparse": models.SparseVectorParams()},
+        )
+
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        dense_embeddings = self.dense_embedding_function(documents)
+        sparse_embeddings = self.sparse_embedding_function(documents)
+        points = [
+            PointStruct(
+                id=ids[i],
+                vector={
+                    "dense": dense_embeddings[i],
+                    "sparse": models.SparseVector(
+                        indices=sparse_embeddings[i]["indices"],
+                        values=sparse_embeddings[i]["values"],
+                    ),
+                },
+                payload=metadata[i],
+            )
+            for i in range(len(ids))
+        ]
+        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        logger.info(f"Upsert operation completed: {operation_info}")
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        dense_query = self.dense_embedding_function(query_texts)[0]
+        sparse_query = self.sparse_embedding_function(query_texts)[0]
+        return self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[
+                models.Prefetch(query=dense_query, using="dense", limit=n_results),
+                models.Prefetch(
+                    query=models.SparseVector(
+                        indices=sparse_query["indices"],
+                        values=sparse_query["values"],
+                    ),
+                    using="sparse",
+                    limit=n_results,
+                ),
+            ],
+            query=models.FusionQuery(fusion=models.Fusion.RRF),
+            limit=n_results,
+            with_payload=True,
+        )
+
+
+class QdrantStore_BM25(LocalQdrantStore):
+    """Full-text lexical search using Qdrant's built-in BM25 sparse model.
+
+    Unlike the other stores, there is no external embedding function: Qdrant
+    (via fastembed) computes IDF-weighted BM25 sparse vectors from the raw text
+    locally, and the collection applies the IDF modifier at query time.
+    """
+
+    def __init__(
+        self,
+        collection_name: str = "nanopore",
+        model: str = "Qdrant/bm25",
+    ) -> None:
+        self.model = model
+        super().__init__(collection_name=collection_name)
+
+    def init_collection(self) -> None:
+        self.client.create_collection(
+            self.collection_name,
+            vectors_config={},
+            sparse_vectors_config={
+                "bm25": models.SparseVectorParams(modifier=models.Modifier.IDF)
+            },
+        )
+
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        points = [
+            PointStruct(
+                id=ids[i],
+                vector={"bm25": models.Document(text=documents[i], model=self.model)},
+                payload=metadata[i],
+            )
+            for i in range(len(documents))
+        ]
+        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        logger.info(f"Upsert operation completed: {operation_info}")
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        return self.client.query_points(
+            collection_name=self.collection_name,
+            query=models.Document(text=query_texts[0], model=self.model),
+            using="bm25",
+            limit=n_results,
+            with_payload=True,
+        )
+
+
+class QdrantStore_Rerank(LocalQdrantStore):
+    """Two-stage retrieval: dense + sparse + BM25 full-text, then ColBERT rerank.
+
+    Stage 1 (retrieve): three named vectors live in one collection -- a dense
+    vector, a SPLADE-style sparse vector, and an IDF-weighted BM25 full-text
+    vector -- each pulled as a prefetch branch.
+    Stage 2 (rerank): the prefetched candidates are re-scored *inside Qdrant*
+    with a ColBERT late-interaction multivector (MAX_SIM comparator). Qdrant
+    (via fastembed) computes the ColBERT multivectors from raw text locally.
+    """
+
+    def __init__(
+        self,
+        dense_embedding_function: Callable,
+        sparse_embedding_function: Callable,
+        collection_name: str = "nanopore",
+        vector_size: int = 128,
+        metric: str = Distance.COSINE,
+        bm25_model: str = "Qdrant/bm25",
+        colbert_model: str = "colbert-ir/colbertv2.0",
+        colbert_dim: int = 128,
+        prefetch_limit: int = 20,
+    ) -> None:
+        self.dense_embedding_function = dense_embedding_function
+        self.sparse_embedding_function = sparse_embedding_function
+        self.vector_size = vector_size
+        self.metric = metric
+        self.bm25_model = bm25_model
+        self.colbert_model = colbert_model
+        self.colbert_dim = colbert_dim
+        self.prefetch_limit = prefetch_limit
+        super().__init__(collection_name=collection_name)
+
+    def init_collection(self) -> None:
+        self.client.create_collection(
+            self.collection_name,
+            vectors_config={
+                "dense": VectorParams(size=self.vector_size, distance=self.metric),
+                "colbert": VectorParams(
+                    size=self.colbert_dim,
+                    distance=self.metric,
+                    multivector_config=models.MultiVectorConfig(
+                        comparator=models.MultiVectorComparator.MAX_SIM
+                    ),
+                ),
+            },
+            sparse_vectors_config={
+                "sparse": models.SparseVectorParams(),
+                "bm25": models.SparseVectorParams(modifier=models.Modifier.IDF),
+            },
+        )
+
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        dense_embeddings = self.dense_embedding_function(documents)
+        sparse_embeddings = self.sparse_embedding_function(documents)
+        points = [
+            PointStruct(
+                id=ids[i],
+                vector={
+                    "dense": dense_embeddings[i],
+                    "sparse": models.SparseVector(
+                        indices=sparse_embeddings[i]["indices"],
+                        values=sparse_embeddings[i]["values"],
+                    ),
+                    "bm25": models.Document(text=documents[i], model=self.bm25_model),
+                    "colbert": models.Document(
+                        text=documents[i], model=self.colbert_model
+                    ),
+                },
+                payload=metadata[i],
+            )
+            for i in range(len(ids))
+        ]
+        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        logger.info(f"Upsert operation completed: {operation_info}")
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        query_text = query_texts[0]
+        dense_query = self.dense_embedding_function(query_texts)[0]
+        sparse_query = self.sparse_embedding_function(query_texts)[0]
+
+        return self.client.query_points(
+            collection_name=self.collection_name,
+            prefetch=[
+                models.Prefetch(
+                    query=dense_query, using="dense", limit=self.prefetch_limit
+                ),
+                models.Prefetch(
+                    query=models.SparseVector(
+                        indices=sparse_query["indices"],
+                        values=sparse_query["values"],
+                    ),
+                    using="sparse",
+                    limit=self.prefetch_limit,
+                ),
+                models.Prefetch(
+                    query=models.Document(text=query_text, model=self.bm25_model),
+                    using="bm25",
+                    limit=self.prefetch_limit,
+                ),
+            ],
+            query=models.Document(text=query_text, model=self.colbert_model),
+            using="colbert",
+            limit=n_results,
+            with_payload=True,
+        )
 
 
 def _chroma():
@@ -325,23 +630,87 @@ def _pinecone_sparse():
     print(results)
 
 
-def _qdrant():
+def _qdrant_dense():
     from .embeddings import GoogleEmbeddings as embeddingService
 
-    store = QdrantStore(embedding_function=embeddingService().getEmbeddings, vector_size=128)
+    store = QdrantStore_Dense(
+        embedding_function=embeddingService().getEmbeddings, vector_size=128
+    )
     store.add_embeddings(
-        ids=[0,1],
+        ids=[0, 1],
         documents=["what is DNA sequencing?", "what is CRISPR?"],
         metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
     )
     results = store.query(query_texts=["DNA"], n_results=1)
     print(results)
 
+
+def _qdrant_sparse():
+    from .embeddings import SPLADE as embeddingService
+
+    store = QdrantStore_Sparse(embedding_function=embeddingService().getEmbeddings)
+    store.add_embeddings(
+        ids=[0, 1],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
+def _qdrant_hybrid():
+    from .embeddings import GoogleEmbeddings, SPLADE
+
+    store = QdrantStore_Hybrid(
+        dense_embedding_function=GoogleEmbeddings().getEmbeddings,
+        sparse_embedding_function=SPLADE().getEmbeddings,
+        vector_size=128,
+    )
+    store.add_embeddings(
+        ids=[0, 1],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
+def _qdrant_bm25():
+    store = QdrantStore_BM25()
+    store.add_embeddings(
+        ids=[0, 1],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
+def _qdrant_rerank():
+    from .embeddings import GoogleEmbeddings, SPLADE
+
+    store = QdrantStore_Rerank(
+        dense_embedding_function=GoogleEmbeddings().getEmbeddings,
+        sparse_embedding_function=SPLADE().getEmbeddings,
+        vector_size=128,
+    )
+    store.add_embeddings(
+        ids=[0, 1],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
 def main():
     # _chroma()
     # _pinecone_dense()
-    # _qdrant()
-    _pinecone_sparse()
+    # _qdrant_dense()
+    # _qdrant_sparse()
+    # _qdrant_hybrid()
+    # _qdrant_bm25()
+    _qdrant_rerank()
 
 
 if __name__ == "__main__":
