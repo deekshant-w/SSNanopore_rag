@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 main = "ssnanopore_rag.main:main"
 check = "ssnanopore_rag.embeddingStore:main"
+check2 = "ssnanopore_rag.embeddings:main"
 
 [build-system]
 requires = ["hatchling"]

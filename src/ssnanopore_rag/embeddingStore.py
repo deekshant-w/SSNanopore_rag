@@ -1,3 +1,7 @@
+from typing import Any
+from typing import Mapping
+from abc import abstractmethod
+from abc import ABCMeta
 import chromadb
 from chromadb.config import Settings
 from typing import Optional, Callable
@@ -15,7 +19,17 @@ logger = logging.getLogger(__name__)
 PROJECT_DIR = Path(__file__).parent.parent.parent
 
 
-class ChromaStore:
+class EmbeddingStore(metaclass=ABCMeta):
+    @abstractmethod
+    def add_embeddings(self, ids: list[str], documents: list[str], metadata: list[dict]) -> None:
+        pass
+
+    @abstractmethod
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        pass
+
+
+class ChromaStore(EmbeddingStore):
     def __init__(
         self,
         db_name: str = "chroma",
@@ -54,24 +68,8 @@ class ChromaStore:
         )
 
 
-class PineconeStore:
-    def __init__(
-        self,
-        embedding_function: Optional[Callable] = None,
-        dimension: int = None,
-        index_name: str = "testing",
-        vector_type: str = "dense",
-        metric: str = "cosine",
-        pinecone_args: Optional[dict] = {},
-        index_args: Optional[dict] = {},
-    ) -> None:
-        logger.info(f"PineconeStore initialized with index {index_name}")
-        if embedding_function and not dimension:
-            raise ValueError(
-                "Dimension must be specified if embedding function is provided"
-            )
-        self.index_name = index_name
-        self.embedding_function = embedding_function
+class LocalPineconeStore(EmbeddingStore):
+    def __init__(self, pinecone_args: Mapping[str, Any] = {}) -> None:
         self._local_host = "http://localhost:5080"
         self.pc = Pinecone(
             api_key="[ENCRYPTION_KEY]",
@@ -79,51 +77,16 @@ class PineconeStore:
             ssl_verify=False,
             **pinecone_args,
         )
-        if not self.pc.has_index(index_name):
-            logger.info(f"Creating index {index_name}")
-            self.pc.indexes.create(
-                name=index_name,
-                vector_type=vector_type,
-                dimension=dimension,
-                metric=metric,
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-                **index_args,
-            )
-        index_info = self.pc.indexes.describe(name=index_name)
+        self.init_index()
+        index_info = self.pc.indexes.describe(name=self.index_name)
         logger.info(f"Index status: {index_info}")
         data_host = index_info.host.replace("https://", "http://")
         logger.warning(f"Using data host: {data_host}")
-        self.index = self.pc.index(name=index_name, host=data_host)
+        self.index = self.pc.index(name=self.index_name, host=data_host)
 
-    def add_embeddings(
-        self,
-        documents: list[str],
-        metadata: list[dict],
-        ids: list[str],
-        namespace: str = "testing",
-    ) -> None:
-        embeddings = self.embedding_function(documents)
-        logger.info(f"Generated {len(embeddings)} embeddings.")
-        self.index.upsert(
-            vectors=[
-                {
-                    "id": ids[i],
-                    "values": embeddings[i],
-                    "metadata": metadata[i],
-                }
-                for i in range(len(embeddings))
-            ],
-            namespace=namespace,
-        )
-        self.wait_for_upsert(self.index, namespace, len(ids))
-
-    def query(
-        self, query_texts: list[str], n_results: int = 5, namespace: str = "testing"
-    ) -> dict:
-        query_embeddings = self.embedding_function(query_texts)
-        return self.index.query(
-            vector=query_embeddings[0], top_k=n_results, namespace=namespace
-        )
+    @abstractmethod
+    def init_index(self) -> None:
+        self.index_name = "<|Uninitialized|>"
 
     def __del__(self):
         self.pc.indexes.delete(name=self.index_name)
@@ -142,8 +105,132 @@ class PineconeStore:
             f"Still only {ns_stats.vector_count if ns_stats else 0} vectors after {timeout}s"
         )
 
+class PineconeStore_Dense(LocalPineconeStore):
+    def __init__(
+        self,
+        embedding_function: Callable,
+        dimension: int,
+        index_name: str,
+        metric: str = "euclidean",
+        namespace: str = "",
+        pinecone_args: Mapping[str, Any] = {},
+        index_args: Mapping[str, Any] = {},
+    ) -> None:
+        """
+        Pinecone -> index (dense) -> multiple namespaces -> multiple vectors
+        """
+        self.embedding_function = embedding_function
+        self.index_name = index_name
+        self.vector_type = "dense"
+        self.dimension = dimension
+        self.metric = metric
+        self.index_args = index_args
+        self.namespace = namespace
+        super().__init__(**pinecone_args)
 
-class QdrantStore:
+
+    def init_index(self) -> None:
+        if not self.pc.has_index(self.index_name):
+            logger.info(f"Creating index {self.index_name}")
+            self.pc.indexes.create(
+                name=self.index_name,
+                vector_type="dense",
+                dimension=self.dimension,
+                metric=self.metric,
+                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                **self.index_args,
+            )
+        # self.index is defined in the parent class
+        
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        embeddings = self.embedding_function(documents)
+        logger.info(f"Generated {len(embeddings)} embeddings.")
+        self.index.upsert(
+            vectors=[
+                {
+                    "id": ids[i],
+                    "values": embeddings[i],
+                    "metadata": metadata[i],
+                }
+                for i in range(len(embeddings))
+            ],
+            namespace=self.namespace,
+        )
+        self.wait_for_upsert(self.index, self.namespace, len(ids))
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        query_embeddings = self.embedding_function(query_texts)
+        return self.index.query(
+            vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
+        )
+
+
+class PineconeStore_Sparse(LocalPineconeStore):
+    def __init__(
+        self,
+        embedding_function: Callable,
+        index_name: str,
+        metric: str = "dotproduct",
+        namespace: str = "",
+        pinecone_args: Mapping[str, Any] = {},
+        index_args: Mapping[str, Any] = {},
+    ) -> None:
+        self.embedding_function = embedding_function
+        self.index_name = index_name
+        self.vector_type = "sparse"
+        self.metric = metric
+        self.index_args = index_args
+        self.namespace = namespace
+        super().__init__(**pinecone_args)
+
+
+    def init_index(self) -> None:
+        if not self.pc.has_index(self.index_name):
+            logger.info(f"Creating index {self.index_name}")
+            self.pc.indexes.create(
+                name=self.index_name,
+                vector_type="sparse",
+                metric=self.metric,
+                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                **self.index_args,
+            )
+        # self.index is defined in the parent class
+        
+    def add_embeddings(
+        self,
+        documents: list[str],
+        metadata: list[dict],
+        ids: list[str],
+    ) -> None:
+        embeddings = self.embedding_function(documents)
+        logger.info(f"Generated {len(embeddings)} embeddings.")
+        self.index.upsert(
+            vectors=[
+                {
+                    "id": ids[i],
+                    "sparse_values": embeddings[i],
+                    "metadata": metadata[i],
+                }
+                for i in range(len(embeddings))
+            ],
+            namespace=self.namespace,
+        )
+        self.wait_for_upsert(self.index, self.namespace, len(ids))
+
+    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        query_embeddings = self.embedding_function(query_texts)
+        return self.index.query(
+            vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
+        )
+
+
+
+class QdrantStore(EmbeddingStore):
     def __init__(
         self,
         db_name: str = "chroma",
@@ -204,11 +291,13 @@ def _chroma():
     print(results)
 
 
-def _pinecone():
+def _pinecone_dense():
     from .embeddings import GoogleEmbeddings as embeddingService
 
-    store = PineconeStore(
-        embedding_function=embeddingService().getEmbeddings, dimension=128
+    store = PineconeStore_Dense(
+        embedding_function=embeddingService().getEmbeddings, 
+        dimension=128,
+        index_name="testing"
     )
     store.add_embeddings(
         ids=["good", "bad"],
@@ -219,7 +308,23 @@ def _pinecone():
     print(results)
 
 
-def main():
+def _pinecone_sparse():
+    from .embeddings import SPLADE as embeddingService
+
+    store = PineconeStore_Sparse(
+        embedding_function=embeddingService().getEmbeddings,
+        index_name="testing",
+    )
+    store.add_embeddings(
+        ids=["good", "bad"],
+        documents=["what is DNA sequencing?", "what is CRISPR?"],
+        metadata=[{"title": "DNA Sequencing"}, {"title": "CRISPR"}],
+    )
+    results = store.query(query_texts=["DNA"], n_results=1)
+    print(results)
+
+
+def _qdrant():
     from .embeddings import GoogleEmbeddings as embeddingService
 
     store = QdrantStore(embedding_function=embeddingService().getEmbeddings, vector_size=128)
@@ -230,6 +335,12 @@ def main():
     )
     results = store.query(query_texts=["DNA"], n_results=1)
     print(results)
+
+def main():
+    # _chroma()
+    # _pinecone_dense()
+    # _qdrant()
+    _pinecone_sparse()
 
 
 if __name__ == "__main__":
