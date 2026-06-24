@@ -472,14 +472,8 @@ class QdrantStore_BM25(LocalQdrantStore):
 
 
 class QdrantStore_Rerank(LocalQdrantStore):
-    """Two-stage retrieval: dense + sparse + BM25 full-text, then ColBERT rerank.
-
-    Stage 1 (retrieve): three named vectors live in one collection -- a dense
-    vector, a SPLADE-style sparse vector, and an IDF-weighted BM25 full-text
-    vector -- each pulled as a prefetch branch.
-    Stage 2 (rerank): the prefetched candidates are re-scored *inside Qdrant*
-    with a ColBERT late-interaction multivector (MAX_SIM comparator). Qdrant
-    (via fastembed) computes the ColBERT multivectors from raw text locally.
+    """
+    dense + sparse + BM25 full-text, then ColBERT rerank.
     """
 
     def __init__(
@@ -489,9 +483,9 @@ class QdrantStore_Rerank(LocalQdrantStore):
         collection_name: str = "nanopore",
         vector_size: int = 128,
         metric: str = Distance.COSINE,
-        bm25_model: str = "Qdrant/bm25",
-        colbert_model: str = "colbert-ir/colbertv2.0",
-        colbert_dim: int = 128,
+        bm25_model: str = "qdrant/bm25",
+        reranker_model: str = "answerdotai/answerai-colbert-small-v1",#"colbert-ir/colbertv2.0",
+        reranker_dim: int = 96,
         prefetch_limit: int = 20,
     ) -> None:
         self.dense_embedding_function = dense_embedding_function
@@ -499,8 +493,8 @@ class QdrantStore_Rerank(LocalQdrantStore):
         self.vector_size = vector_size
         self.metric = metric
         self.bm25_model = bm25_model
-        self.colbert_model = colbert_model
-        self.colbert_dim = colbert_dim
+        self.reranker_model = reranker_model
+        self.reranker_dim = reranker_dim
         self.prefetch_limit = prefetch_limit
         super().__init__(collection_name=collection_name)
 
@@ -509,12 +503,13 @@ class QdrantStore_Rerank(LocalQdrantStore):
             self.collection_name,
             vectors_config={
                 "dense": VectorParams(size=self.vector_size, distance=self.metric),
-                "colbert": VectorParams(
-                    size=self.colbert_dim,
+                "reranker": VectorParams(
+                    size=self.reranker_dim,
                     distance=self.metric,
                     multivector_config=models.MultiVectorConfig(
                         comparator=models.MultiVectorComparator.MAX_SIM
                     ),
+                    hnsw_config=models.HnswConfigDiff(m=0)
                 ),
             },
             sparse_vectors_config={
@@ -541,8 +536,8 @@ class QdrantStore_Rerank(LocalQdrantStore):
                         values=sparse_embeddings[i]["values"],
                     ),
                     "bm25": models.Document(text=documents[i], model=self.bm25_model),
-                    "colbert": models.Document(
-                        text=documents[i], model=self.colbert_model
+                    "reranker": models.Document(
+                        text=documents[i], model=self.reranker_model
                     ),
                 },
                 payload=metadata[i],
@@ -553,7 +548,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
         logger.info(f"Upsert operation completed: {operation_info}")
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
-        query_text = query_texts[0]
+        query_text = query_texts
         dense_query = self.dense_embedding_function(query_texts)[0]
         sparse_query = self.sparse_embedding_function(query_texts)[0]
 
@@ -572,13 +567,13 @@ class QdrantStore_Rerank(LocalQdrantStore):
                     limit=self.prefetch_limit,
                 ),
                 models.Prefetch(
-                    query=models.Document(text=query_text, model=self.bm25_model),
+                    query=models.Document(text=query_text[0], model=self.bm25_model),
                     using="bm25",
                     limit=self.prefetch_limit,
                 ),
             ],
-            query=models.Document(text=query_text, model=self.colbert_model),
-            using="colbert",
+            query=models.Document(text=query_text[0], model=self.reranker_model),
+            using="reranker",
             limit=n_results,
             with_payload=True,
         )
