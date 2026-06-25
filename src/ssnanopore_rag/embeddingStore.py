@@ -478,17 +478,17 @@ class QdrantStore_Rerank(LocalQdrantStore):
 
     def __init__(
         self,
-        dense_embedding_function: Callable,
         sparse_embedding_function: Callable,
+        dense_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
+        vector_size: int = 384,
         collection_name: str = "nanopore",
-        vector_size: int = 128,
         metric: str = Distance.COSINE,
         bm25_model: str = "qdrant/bm25",
         reranker_model: str = "answerdotai/answerai-colbert-small-v1",#"colbert-ir/colbertv2.0",
         reranker_dim: int = 96,
         prefetch_limit: int = 20,
     ) -> None:
-        self.dense_embedding_function = dense_embedding_function
+        self.dense_embedding_model = dense_embedding_model
         self.sparse_embedding_function = sparse_embedding_function
         self.vector_size = vector_size
         self.metric = metric
@@ -524,13 +524,12 @@ class QdrantStore_Rerank(LocalQdrantStore):
         metadata: list[dict],
         ids: list[str],
     ) -> None:
-        dense_embeddings = self.dense_embedding_function(documents)
         sparse_embeddings = self.sparse_embedding_function(documents)
         points = [
             PointStruct(
                 id=ids[i],
                 vector={
-                    "dense": dense_embeddings[i],
+                    "dense": models.Document(text=documents[i], model=self.dense_embedding_model),
                     "sparse": models.SparseVector(
                         indices=sparse_embeddings[i]["indices"],
                         values=sparse_embeddings[i]["values"],
@@ -549,14 +548,14 @@ class QdrantStore_Rerank(LocalQdrantStore):
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         query_text = query_texts
-        dense_query = self.dense_embedding_function(query_texts)[0]
         sparse_query = self.sparse_embedding_function(query_texts)[0]
 
         return self.client.query_points(
             collection_name=self.collection_name,
             prefetch=[
                 models.Prefetch(
-                    query=dense_query, using="dense", limit=self.prefetch_limit
+                    query=models.Document(text=query_text[0], model=self.dense_embedding_model),
+                    using="dense", limit=self.prefetch_limit
                 ),
                 models.Prefetch(
                     query=models.SparseVector(
@@ -685,9 +684,7 @@ def _qdrant_rerank():
     from .embeddings import GoogleEmbeddings, SPLADE
 
     store = QdrantStore_Rerank(
-        dense_embedding_function=GoogleEmbeddings().getEmbeddings,
         sparse_embedding_function=SPLADE().getEmbeddings,
-        vector_size=128,
     )
     store.add_embeddings(
         ids=[0, 1],

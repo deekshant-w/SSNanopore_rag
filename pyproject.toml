@@ -10,6 +10,7 @@ dependencies = [
     "dotenv>=0.9.9",
     "google-genai>=2.6.0",
     "hf-xet>=1.5.0",
+    "ollama>=0.6.2",
     "pinecone[grpc]>=9.0.1",
     "pydantic>=2.13.4",
     "qdrant-client[fastembed]>=1.18.0",
@@ -23,7 +24,7 @@ dependencies = [
 [project.scripts]
 main = "ssnanopore_rag.main:main"
 check = "ssnanopore_rag.embeddingStore:main"
-check2 = "ssnanopore_rag.embeddings:main"
+check2 = "ssnanopore_rag.localLLM:main"
 
 [build-system]
 requires = ["hatchling"]
