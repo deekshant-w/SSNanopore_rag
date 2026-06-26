@@ -10,9 +10,13 @@ class LLM:
     def __init__(
         self,
         model: str = "gemma4:e2b",
-        tools: list[dict] = [],
-        functions: dict[str, callable] = {},
+        tools: list[dict] = None,
+        functions: dict[str, callable] = None,
     ) -> None:
+        if functions is None:
+            functions = {}
+        if tools is None:
+            tools = []
         self.model = model
         self.msgs = [
             {

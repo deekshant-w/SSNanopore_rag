@@ -126,7 +126,8 @@ def make_data():
     data = parse_ris_data(ris_file)
     # check_keys(data)
     papers = convert_ris_data_to_entities(data)
-    json.dump(papers, open(dataPath / "papers.json", "w", encoding="utf-8"), indent=2)
+    with open(dataPath / "papers.json", "w", encoding="utf-8") as f:
+        json.dump(papers, f, indent=2)
 
 
 if __name__ == "__main__":
