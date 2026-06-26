@@ -45,3 +45,28 @@ torch = [
 torchvision = [
   { index = "pytorch-cu130" },
 ]
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.20",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modernize syntax)
+    "B",   # bugbear (likely bugs)
+    "SIM", # simplify
+]
+ignore = ["E501"]   # line length, formatter handles it
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

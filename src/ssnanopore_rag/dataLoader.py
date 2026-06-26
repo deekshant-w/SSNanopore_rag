@@ -1,16 +1,13 @@
-from typing import Any
-from pathlib import Path
-from pydantic import BaseModel, ConfigDict
-from dotenv import load_dotenv
-from tqdm.auto import tqdm
 import json
-import re
 import logging
+import re
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict
 
 PROJECT_DIR = Path(__file__).parent.parent.parent
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +36,7 @@ def parse_ris_data(ris_file: Path) -> list[dict[str, str]]:
             return
         entries.append({"key": key.strip(), "value": value.strip()})
 
-    with open(ris_file, "r", encoding="utf-8") as file:
+    with open(ris_file, encoding="utf-8") as file:
         lineContent = ""
         for line in file:
             # if line is of the type <capital char><capital char><space><space><-><space><text>:

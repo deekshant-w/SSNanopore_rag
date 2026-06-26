@@ -1,13 +1,12 @@
-from google.genai._interactions.types import code_execution_result_step_param
-from transformers import AutoTokenizer, AutoModelForMaskedLM
-from adapters import AutoAdapterModel
+import logging
 from abc import ABCMeta, abstractmethod
+
+import torch
+from adapters import AutoAdapterModel
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
-import os
-import logging
-import torch
+from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +105,7 @@ class GoogleEmbeddings(EmbeddingService):
             )
         return embeddings
 
+
 class SPLADE(EmbeddingService):
     def __init__(self):
         logger.info("Initializing SPLADE")
@@ -117,7 +117,6 @@ class SPLADE(EmbeddingService):
         self.model = AutoModelForMaskedLM.from_pretrained(model_id).eval()
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
-        
         embeddings = []
         for query in queries:
             with torch.no_grad():
@@ -130,14 +129,12 @@ class SPLADE(EmbeddingService):
                 )
                 logits = self.model(**inputs).logits
                 vec = torch.max(
-                        torch.log1p(torch.relu(logits)) * inputs.attention_mask.unsqueeze(-1),
-                        dim=1,
-                    ).values.squeeze()
+                    torch.log1p(torch.relu(logits)) * inputs.attention_mask.unsqueeze(-1),
+                    dim=1,
+                ).values.squeeze()
             nz = vec.nonzero().squeeze(-1)
             embeddings.append({"indices": nz.tolist(), "values": vec[nz].tolist()})
         return embeddings
-
-        
 
 
 def main():
@@ -145,9 +142,7 @@ def main():
     # embeddingService = BioBERT()
     # embeddingService = Specter2()
     embeddingService = SPLADE()
-    embeddings = embeddingService.getEmbeddings(
-        ["what is DNA sequencing?", "what is CRISPR?"]
-    )
+    embeddings = embeddingService.getEmbeddings(["what is DNA sequencing?", "what is CRISPR?"])
     for i, embedding in enumerate(embeddings):
         print(f"Embedding for query {i}: {embedding}")
 

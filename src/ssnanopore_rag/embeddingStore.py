@@ -1,21 +1,18 @@
-from typing import Any
-from typing import Mapping
-from abc import abstractmethod
-from abc import ABCMeta
-import chromadb
-from chromadb.config import Settings
-from typing import Optional, Callable
 import logging
+import time
+from abc import ABCMeta, abstractmethod
+from collections.abc import Callable, Mapping
 from pathlib import Path
+from typing import Any
+
+import chromadb
 
 # from pinecone import Pinecone
 from pinecone import ServerlessSpec
-import time
 from pinecone.grpc import PineconeGRPC as Pinecone
-from qdrant_client import QdrantClient
-from qdrant_client import models
-from qdrant_client.models import Distance, VectorParams
-from qdrant_client.models import PointStruct
+from qdrant_client import QdrantClient, models
+from qdrant_client.models import Distance, PointStruct, VectorParams
+
 logger = logging.getLogger(__name__)
 PROJECT_DIR = Path(__file__).parent.parent.parent
 
@@ -35,7 +32,7 @@ class ChromaStore(EmbeddingStore):
         self,
         db_name: str = "chroma",
         collection_name: str = "nanopore",
-        embedding_function: Optional[Callable] = None,
+        embedding_function: Callable | None = None,
     ) -> None:
         logger.info("Initializing ChromaStore")
         self.client = chromadb.PersistentClient(path=PROJECT_DIR / "data" / db_name)
@@ -54,14 +51,10 @@ class ChromaStore(EmbeddingStore):
         )
         logger.info("ChromaStore initialized")
 
-    def add_embeddings(
-        self, ids: list[str], documents: list[str], metadata: list[dict]
-    ) -> None:
+    def add_embeddings(self, ids: list[str], documents: list[str], metadata: list[dict]) -> None:
         embeddings = self.embedding_function(documents)
         logger.info(f"Generated {len(embeddings)} embeddings.")
-        self.collection.add(
-            ids=ids, embeddings=embeddings, metadatas=metadata, documents=documents
-        )
+        self.collection.add(ids=ids, embeddings=embeddings, metadatas=metadata, documents=documents)
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         return self.collection.query(
@@ -106,6 +99,7 @@ class LocalPineconeStore(EmbeddingStore):
             f"Still only {ns_stats.vector_count if ns_stats else 0} vectors after {timeout}s"
         )
 
+
 class PineconeStore_Dense(LocalPineconeStore):
     def __init__(
         self,
@@ -129,7 +123,6 @@ class PineconeStore_Dense(LocalPineconeStore):
         self.namespace = namespace
         super().__init__(**pinecone_args)
 
-
     def init_index(self) -> None:
         if not self.pc.has_index(self.index_name):
             logger.info(f"Creating index {self.index_name}")
@@ -142,7 +135,7 @@ class PineconeStore_Dense(LocalPineconeStore):
                 **self.index_args,
             )
         # self.index is defined in the parent class
-        
+
     def add_embeddings(
         self,
         documents: list[str],
@@ -181,14 +174,15 @@ class PineconeStore_Sparse(LocalPineconeStore):
         pinecone_args: Mapping[str, Any] = {},
         index_args: Mapping[str, Any] = {},
     ) -> None:
-        raise NotImplementedError("Sparse encoding in Pinecone is not working - https://github.com/pinecone-io/python-sdk/issues/679")
+        raise NotImplementedError(
+            "Sparse encoding in Pinecone is not working - https://github.com/pinecone-io/python-sdk/issues/679"
+        )
         self.embedding_function = embedding_function
         self.index_name = index_name
         self.metric = metric
         self.index_args = index_args
         self.namespace = namespace
         super().__init__(**pinecone_args)
-
 
     def init_index(self) -> None:
         if not self.pc.has_index(self.index_name):
@@ -202,7 +196,7 @@ class PineconeStore_Sparse(LocalPineconeStore):
                 **self.index_args,
             )
         # self.index is defined in the parent class
-        
+
     def add_embeddings(
         self,
         documents: list[str],
@@ -229,7 +223,6 @@ class PineconeStore_Sparse(LocalPineconeStore):
         return self.index.query(
             vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
         )
-
 
 
 class LocalQdrantStore(EmbeddingStore):
@@ -366,9 +359,7 @@ class QdrantStore_Hybrid(LocalQdrantStore):
     def init_collection(self) -> None:
         self.client.create_collection(
             self.collection_name,
-            vectors_config={
-                "dense": VectorParams(size=self.vector_size, distance=self.metric)
-            },
+            vectors_config={"dense": VectorParams(size=self.vector_size, distance=self.metric)},
             sparse_vectors_config={"sparse": models.SparseVectorParams()},
         )
 
@@ -439,9 +430,7 @@ class QdrantStore_BM25(LocalQdrantStore):
         self.client.create_collection(
             self.collection_name,
             vectors_config={},
-            sparse_vectors_config={
-                "bm25": models.SparseVectorParams(modifier=models.Modifier.IDF)
-            },
+            sparse_vectors_config={"bm25": models.SparseVectorParams(modifier=models.Modifier.IDF)},
         )
 
     def add_embeddings(
@@ -484,7 +473,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
         collection_name: str = "nanopore",
         metric: str = Distance.COSINE,
         bm25_model: str = "qdrant/bm25",
-        reranker_model: str = "answerdotai/answerai-colbert-small-v1",#"colbert-ir/colbertv2.0",
+        reranker_model: str = "answerdotai/answerai-colbert-small-v1",  # "colbert-ir/colbertv2.0",
         reranker_dim: int = 96,
         prefetch_limit: int = 20,
     ) -> None:
@@ -509,7 +498,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
                     multivector_config=models.MultiVectorConfig(
                         comparator=models.MultiVectorComparator.MAX_SIM
                     ),
-                    hnsw_config=models.HnswConfigDiff(m=0)
+                    hnsw_config=models.HnswConfigDiff(m=0),
                 ),
             },
             sparse_vectors_config={
@@ -535,9 +524,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
                         values=sparse_embeddings[i]["values"],
                     ),
                     "bm25": models.Document(text=documents[i], model=self.bm25_model),
-                    "reranker": models.Document(
-                        text=documents[i], model=self.reranker_model
-                    ),
+                    "reranker": models.Document(text=documents[i], model=self.reranker_model),
                 },
                 payload=metadata[i],
             )
@@ -555,7 +542,8 @@ class QdrantStore_Rerank(LocalQdrantStore):
             prefetch=[
                 models.Prefetch(
                     query=models.Document(text=query_text[0], model=self.dense_embedding_model),
-                    using="dense", limit=self.prefetch_limit
+                    using="dense",
+                    limit=self.prefetch_limit,
                 ),
                 models.Prefetch(
                     query=models.SparseVector(
@@ -595,9 +583,9 @@ def _pinecone_dense():
     from .embeddings import GoogleEmbeddings as embeddingService
 
     store = PineconeStore_Dense(
-        embedding_function=embeddingService().getEmbeddings, 
+        embedding_function=embeddingService().getEmbeddings,
         dimension=128,
-        index_name="testing"
+        index_name="testing",
     )
     store.add_embeddings(
         ids=["good", "bad"],
@@ -627,9 +615,7 @@ def _pinecone_sparse():
 def _qdrant_dense():
     from .embeddings import GoogleEmbeddings as embeddingService
 
-    store = QdrantStore_Dense(
-        embedding_function=embeddingService().getEmbeddings, vector_size=128
-    )
+    store = QdrantStore_Dense(embedding_function=embeddingService().getEmbeddings, vector_size=128)
     store.add_embeddings(
         ids=[0, 1],
         documents=["what is DNA sequencing?", "what is CRISPR?"],
@@ -653,7 +639,7 @@ def _qdrant_sparse():
 
 
 def _qdrant_hybrid():
-    from .embeddings import GoogleEmbeddings, SPLADE
+    from .embeddings import SPLADE, GoogleEmbeddings
 
     store = QdrantStore_Hybrid(
         dense_embedding_function=GoogleEmbeddings().getEmbeddings,
@@ -681,7 +667,7 @@ def _qdrant_bm25():
 
 
 def _qdrant_rerank():
-    from .embeddings import GoogleEmbeddings, SPLADE
+    from .embeddings import SPLADE
 
     store = QdrantStore_Rerank(
         sparse_embedding_function=SPLADE().getEmbeddings,
