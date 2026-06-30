@@ -6,9 +6,8 @@
 
 > ⚠️ **Work in progress.** The individual building blocks below work today; the
 > end-to-end pipeline that wires them together is still being assembled.
->
-> 🪦 **Pinecone is shelved.** After hitting two upstream blockers
-> Raised ([#678](https://github.com/pinecone-io/python-sdk/issues/678) and [#679](https://github.com/pinecone-io/python-sdk/issues/679)) (Unlikely to be fixed), `pinecone-local` forces an HTTPS host and can't create sparse indexes — I've given up on it; development proceeds mainly on **Qdrant** and **ChromaDB**.
+
+> 🪦 **Pinecone is shelved.** After hitting two upstream blockers I raised ([#678](https://github.com/pinecone-io/python-sdk/issues/678) and [#679](https://github.com/pinecone-io/python-sdk/issues/679)) (Unlikely to be fixed), `pinecone-local` forces an HTTPS host and can't create sparse indexes — I've given up on it; development proceeds mainly on **Qdrant** and **ChromaDB**.
 
 ---
 
