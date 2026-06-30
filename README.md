@@ -180,4 +180,3 @@ bugbear, and simplify rules enabled.
     dense-only), so the Pinecone **sparse** store is disabled.
   - **Use the Qdrant sparse/hybrid/rerank stores instead** — they support all of this locally.
 - Interfaces and structure are still evolving as the project develops.
-```
