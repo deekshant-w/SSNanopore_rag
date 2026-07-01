@@ -120,6 +120,13 @@ def convert_ris_data_to_entities(data: list[dict[str, str]]):
     return papers
 
 
+def dataLoadingUtility(ris_file: Path, output_file: Path):
+    data = parse_ris_data(ris_file)
+    papers = convert_ris_data_to_entities(data)
+    with open(output_file, "w", encoding="utf-8") as f:
+        json.dump(papers, f, indent=2)
+
+
 def make_data():
     dataPath = PROJECT_DIR / "data"
     ris_file = dataPath / "kyle_export.ris"
