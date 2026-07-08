@@ -23,8 +23,9 @@ dependencies = [
 
 [project.scripts]
 main = "ssnanopore_rag.main:main"
-check = "ssnanopore_rag.embeddingStore:main"
-check2 = "ssnanopore_rag.localLLM:main"
+cli = "ssnanopore_rag.cli:main"
+check = "ssnanopore_rag.components.embeddingStore:main"
+check2 = "ssnanopore_rag.components.localLLM:main"
 
 [build-system]
 requires = ["hatchling"]
