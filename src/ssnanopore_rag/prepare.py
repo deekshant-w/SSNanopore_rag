@@ -1,10 +1,9 @@
+"""
+This module will load the data from the data folder and prepare it to be embedded and stored in the datastore.
+"""
+
 import logging
 
-import dotenv
-
-dotenv.load_dotenv()
-
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
