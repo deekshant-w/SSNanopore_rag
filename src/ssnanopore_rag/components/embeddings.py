@@ -6,6 +6,7 @@ from adapters import AutoAdapterModel
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+from tqdm.auto import tqdm
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class BioBERT(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in queries:
+        for query in tqdm(queries, desc="Embedding queries with BioBERT"):
             inputs = self.tokenizer(
                 query,
                 return_tensors="pt",
@@ -51,9 +52,10 @@ class BioBERT(EmbeddingService):
 
 
 class Specter2(EmbeddingService):
-    def __init__(self):
+    def __init__(self, embedding_size: int = 512):
         logger.info("Initializing Specter2")
         super().__init__()
+        self.embedding_size = embedding_size
 
     def initializeModelRequirements(self):
         self.tokenizer = AutoTokenizer.from_pretrained("allenai/specter2_base")
@@ -61,18 +63,18 @@ class Specter2(EmbeddingService):
         self.model.load_adapter(
             "allenai/specter2", source="hf", load_as="specter2", set_active=True
         )
-        self.model.set_active_adapters("specter2")
         self.model.eval()
+        self.model.set_active_adapters("specter2")
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in queries:
+        for query in tqdm(queries, desc="Embedding queries with Specter2"):
             inputs = self.tokenizer(
                 query,
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=self.embedding_size,
             )
             outputs = self.model(**inputs)
             embeddings.append(outputs.last_hidden_state[0, 0].detach().numpy().tolist())
@@ -91,7 +93,7 @@ class GoogleEmbeddings(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in queries:
+        for query in tqdm(queries, desc="Embedding queries with GoogleEmbeddings"):
             embeddings.append(
                 self.model.models.embed_content(
                     model=self.model_name,
@@ -118,7 +120,7 @@ class SPLADE(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in queries:
+        for query in tqdm(queries, desc="Embedding queries with SPLADE"):
             with torch.no_grad():
                 inputs = self.tokenizer(
                     query,

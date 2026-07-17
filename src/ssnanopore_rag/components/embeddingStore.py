@@ -1,4 +1,5 @@
 import logging
+import shutil
 import time
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Mapping
@@ -12,6 +13,7 @@ from pinecone import ServerlessSpec
 from pinecone.grpc import PineconeGRPC as Pinecone
 from qdrant_client import QdrantClient, models
 from qdrant_client.models import Distance, PointStruct, VectorParams
+from tqdm.auto import trange
 
 logger = logging.getLogger(__name__)
 PROJECT_DIR = Path(__file__).parent.parent.parent
@@ -35,7 +37,15 @@ class ChromaStore(EmbeddingStore):
         embedding_function: Callable | None = None,
     ) -> None:
         logger.info("Initializing ChromaStore")
-        self.client = chromadb.PersistentClient(path=PROJECT_DIR / "data" / db_name)
+        db_path = PROJECT_DIR / "vectorDb" / db_name
+        # delete and wait for the directory to be deleted
+        if db_path.exists():
+            logger.info(f"Deleting vector DB {db_path}")
+            shutil.rmtree(db_path)
+            while db_path.exists():
+                time.sleep(1)
+                logger.info(f"Waiting for vector DB {db_path} to be deleted...")
+        self.client = chromadb.PersistentClient(path=db_path)
         # self.client = chromadb.Client()
         self.embedding_function = embedding_function
         self.collection = self.client.get_or_create_collection(
@@ -52,13 +62,13 @@ class ChromaStore(EmbeddingStore):
         logger.info("ChromaStore initialized")
 
     def add_embeddings(self, ids: list[str], documents: list[str], metadata: list[dict]) -> None:
-        embeddings = self.embedding_function(documents)
+        embeddings = self.embedding_function.getEmbeddings(documents)
         logger.info(f"Generated {len(embeddings)} embeddings.")
         self.collection.add(ids=ids, embeddings=embeddings, metadatas=metadata, documents=documents)
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         return self.collection.query(
-            query_embeddings=self.embedding_function(query_texts), n_results=n_results
+            query_embeddings=self.embedding_function.getEmbeddings(query_texts), n_results=n_results
         )
 
 
@@ -86,18 +96,23 @@ class LocalPineconeStore(EmbeddingStore):
         self.pc.indexes.delete(name=self.index_name)
         logger.info(f"Deleted index {self.index_name}")
 
-    def wait_for_upsert(self, index, namespace, expected_count, timeout=100):
+    def wait_for_upsert(self, index, namespace, expected_count, timeout=10000):
         """Block until the index has indexed all records."""
         start = time.time()
         while time.time() - start < timeout:
             stats = index.describe_index_stats()
-            ns_stats = stats.namespaces.get(namespace, None)
-            if ns_stats and ns_stats.vector_count >= expected_count:
+            current_count = (
+                stats.get("namespaces", {}).get(namespace, {}).get("vector_count", 0)
+                if namespace
+                else stats.get("total_vector_count", 0)
+            )
+            if current_count >= expected_count:
                 return
-            time.sleep(0.5)
-        raise TimeoutError(
-            f"Still only {ns_stats.vector_count if ns_stats else 0} vectors after {timeout}s"
-        )
+            print(
+                f"Vectors upserted: {current_count/expected_count*100:.2f}% : {current_count}/{expected_count}"
+            )
+            time.sleep(2)
+        raise TimeoutError(f"Still only {current_count} vectors after {timeout}s")
 
 
 class PineconeStore_Dense(LocalPineconeStore):
@@ -105,7 +120,7 @@ class PineconeStore_Dense(LocalPineconeStore):
         self,
         embedding_function: Callable,
         dimension: int,
-        index_name: str,
+        index_name: str = "nanopore",
         metric: str = "euclidean",
         namespace: str = "",
         pinecone_args: Mapping[str, Any] = {},
@@ -124,16 +139,21 @@ class PineconeStore_Dense(LocalPineconeStore):
         super().__init__(**pinecone_args)
 
     def init_index(self) -> None:
-        if not self.pc.has_index(self.index_name):
-            logger.info(f"Creating index {self.index_name}")
-            self.pc.indexes.create(
-                name=self.index_name,
-                vector_type="dense",
-                dimension=self.dimension,
-                metric=self.metric,
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-                **self.index_args,
-            )
+        if self.pc.has_index(self.index_name):
+            logger.info(f"Deleting index {self.index_name}")
+            self.pc.indexes.delete(name=self.index_name)
+            while self.pc.has_index(self.index_name):
+                time.sleep(1)
+                logger.info(f"Waiting for index {self.index_name} to be deleted...")
+        logger.info(f"Creating index {self.index_name}")
+        self.pc.indexes.create(
+            name=self.index_name,
+            vector_type="dense",
+            dimension=self.dimension,
+            metric=self.metric,
+            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+            **self.index_args,
+        )
         # self.index is defined in the parent class
 
     def add_embeddings(
@@ -141,24 +161,27 @@ class PineconeStore_Dense(LocalPineconeStore):
         documents: list[str],
         metadata: list[dict],
         ids: list[str],
+        batch_size: int = 100,
     ) -> None:
-        embeddings = self.embedding_function(documents)
+        embeddings = self.embedding_function.getEmbeddings(documents)
         logger.info(f"Generated {len(embeddings)} embeddings.")
-        self.index.upsert(
-            vectors=[
-                {
-                    "id": ids[i],
-                    "values": embeddings[i],
-                    "metadata": metadata[i],
-                }
-                for i in range(len(embeddings))
-            ],
-            namespace=self.namespace,
-        )
+        for start in trange(0, len(ids), batch_size, desc="Upserting to PineconeStore_Dense"):
+            end = min(start + batch_size, len(ids))
+            self.index.upsert(
+                vectors=[
+                    {
+                        "id": ids[i],
+                        "values": embeddings[i],
+                        "metadata": metadata[i],
+                    }
+                    for i in range(start, end)
+                ],
+                namespace=self.namespace,
+            )
         self.wait_for_upsert(self.index, self.namespace, len(ids))
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
-        query_embeddings = self.embedding_function(query_texts)
+        query_embeddings = self.embedding_function.getEmbeddings(query_texts)
         return self.index.query(
             vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
         )
@@ -203,7 +226,7 @@ class PineconeStore_Sparse(LocalPineconeStore):
         metadata: list[dict],
         ids: list[str],
     ) -> None:
-        embeddings = self.embedding_function(documents)
+        embeddings = self.embedding_function.getEmbeddings(documents)
         logger.info(f"Generated {len(embeddings)} embeddings.")
         self.index.upsert(
             vectors=[
@@ -212,14 +235,14 @@ class PineconeStore_Sparse(LocalPineconeStore):
                     "sparse_values": embeddings[i],
                     "metadata": metadata[i],
                 }
-                for i in range(len(embeddings))
+                for i in trange(len(embeddings))
             ],
             namespace=self.namespace,
         )
         self.wait_for_upsert(self.index, self.namespace, len(ids))
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
-        query_embeddings = self.embedding_function(query_texts)
+        query_embeddings = self.embedding_function.getEmbeddings(query_texts)
         return self.index.query(
             vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
         )
@@ -229,9 +252,12 @@ class LocalQdrantStore(EmbeddingStore):
     def __init__(self, collection_name: str = "nanopore") -> None:
         logger.info("Initializing %s", type(self).__name__)
         # client = QdrantClient(path=PROJECT_DIR / "data" / db_name)
-        # client = QdrantClient(host="localhost", port=6333)
-        self.client = QdrantClient(":memory:")
+        client = QdrantClient(url="http://localhost:6333")
+        # client = QdrantClient(":memory:")
+        self.client = client
         self.collection_name = collection_name
+        logger.info("Deleting collection %s", self.collection_name)
+        self.client.delete_collection(collection_name=self.collection_name)
         self.init_collection()
         logger.info("%s initialized", type(self).__name__)
 
@@ -266,20 +292,20 @@ class QdrantStore_Dense(LocalQdrantStore):
         metadata: list[dict],
         ids: list[str],
     ) -> None:
-        embeddings = self.embedding_function(documents)
+        embeddings = self.embedding_function.getEmbeddings(documents)
         points = [
             PointStruct(
                 id=ids[i],
                 vector=embeddings[i],
                 payload=metadata[i],
             )
-            for i in range(len(embeddings))
+            for i in trange(len(embeddings))
         ]
         operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
         logger.info(f"Upsert operation completed: {operation_info}")
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
-        query_embeddings = self.embedding_function(query_texts)
+        query_embeddings = self.embedding_function.getEmbeddings(query_texts)
         return self.client.query_points(
             collection_name=self.collection_name,
             query=query_embeddings[0],
@@ -310,7 +336,7 @@ class QdrantStore_Sparse(LocalQdrantStore):
         metadata: list[dict],
         ids: list[str],
     ) -> None:
-        embeddings = self.embedding_function(documents)
+        embeddings = self.embedding_function.getEmbeddings(documents)
         points = [
             PointStruct(
                 id=ids[i],
@@ -322,13 +348,13 @@ class QdrantStore_Sparse(LocalQdrantStore):
                 },
                 payload=metadata[i],
             )
-            for i in range(len(embeddings))
+            for i in trange(len(embeddings))
         ]
         operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
         logger.info(f"Upsert operation completed: {operation_info}")
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
-        query_embedding = self.embedding_function(query_texts)[0]
+        query_embedding = self.embedding_function.getEmbeddings(query_texts)[0]
         return self.client.query_points(
             collection_name=self.collection_name,
             query=models.SparseVector(
@@ -370,7 +396,7 @@ class QdrantStore_Hybrid(LocalQdrantStore):
         ids: list[str],
     ) -> None:
         dense_embeddings = self.dense_embedding_function(documents)
-        sparse_embeddings = self.sparse_embedding_function(documents)
+        sparse_embeddings = self.sparse_embedding_function.getEmbeddings(documents)
         points = [
             PointStruct(
                 id=ids[i],
@@ -383,14 +409,14 @@ class QdrantStore_Hybrid(LocalQdrantStore):
                 },
                 payload=metadata[i],
             )
-            for i in range(len(ids))
+            for i in trange(len(ids))
         ]
         operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
         logger.info(f"Upsert operation completed: {operation_info}")
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         dense_query = self.dense_embedding_function(query_texts)[0]
-        sparse_query = self.sparse_embedding_function(query_texts)[0]
+        sparse_query = self.sparse_embedding_function.getEmbeddings(query_texts)[0]
         return self.client.query_points(
             collection_name=self.collection_name,
             prefetch=[
@@ -412,10 +438,7 @@ class QdrantStore_Hybrid(LocalQdrantStore):
 
 class QdrantStore_BM25(LocalQdrantStore):
     """Full-text lexical search using Qdrant's built-in BM25 sparse model.
-
-    Unlike the other stores, there is no external embedding function: Qdrant
-    (via fastembed) computes IDF-weighted BM25 sparse vectors from the raw text
-    locally, and the collection applies the IDF modifier at query time.
+    It uses fastembed to compute IDF-weighted BM25 sparse vectors automatically.
     """
 
     def __init__(
@@ -445,7 +468,7 @@ class QdrantStore_BM25(LocalQdrantStore):
                 vector={"bm25": models.Document(text=documents[i], model=self.model)},
                 payload=metadata[i],
             )
-            for i in range(len(documents))
+            for i in trange(len(documents))
         ]
         operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
         logger.info(f"Upsert operation completed: {operation_info}")
@@ -512,30 +535,36 @@ class QdrantStore_Rerank(LocalQdrantStore):
         documents: list[str],
         metadata: list[dict],
         ids: list[str],
+        batch_size: int = 2,
     ) -> None:
-        sparse_embeddings = self.sparse_embedding_function(documents)
-        points = [
-            PointStruct(
-                id=ids[i],
-                vector={
-                    "dense": models.Document(text=documents[i], model=self.dense_embedding_model),
-                    "sparse": models.SparseVector(
-                        indices=sparse_embeddings[i]["indices"],
-                        values=sparse_embeddings[i]["values"],
-                    ),
-                    "bm25": models.Document(text=documents[i], model=self.bm25_model),
-                    "reranker": models.Document(text=documents[i], model=self.reranker_model),
-                },
-                payload=metadata[i],
-            )
-            for i in range(len(ids))
-        ]
-        operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
+        # All at once, makes the system OOM
+        sparse_embeddings = self.sparse_embedding_function.getEmbeddings(documents)
+        for start in trange(0, len(ids), batch_size, desc="Upserting to QdrantStore_Rerank"):
+            end = min(start + batch_size, len(ids))
+            points = [
+                PointStruct(
+                    id=ids[i],
+                    vector={
+                        "dense": models.Document(
+                            text=documents[i], model=self.dense_embedding_model
+                        ),
+                        "sparse": models.SparseVector(
+                            indices=sparse_embeddings[i]["indices"],
+                            values=sparse_embeddings[i]["values"],
+                        ),
+                        "bm25": models.Document(text=documents[i], model=self.bm25_model),
+                        "reranker": models.Document(text=documents[i], model=self.reranker_model),
+                    },
+                    payload=metadata[i],
+                )
+                for i in range(start, end)
+            ]
+            operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
         logger.info(f"Upsert operation completed: {operation_info}")
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         query_text = query_texts
-        sparse_query = self.sparse_embedding_function(query_texts)[0]
+        sparse_query = self.sparse_embedding_function.getEmbeddings(query_texts)[0]
 
         return self.client.query_points(
             collection_name=self.collection_name,

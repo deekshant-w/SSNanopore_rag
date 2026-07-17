@@ -19,13 +19,14 @@ dependencies = [
     "torch>=2.12.0",
     "torchvision>=0.27.0",
     "tqdm>=4.67.3",
+    "typer>=0.26.1",
 ]
 
 [project.scripts]
 main = "ssnanopore_rag.main:main"
-cli = "ssnanopore_rag.cli:main"
+prepare = "ssnanopore_rag.prepare:main"
 check = "ssnanopore_rag.components.embeddingStore:main"
-check2 = "ssnanopore_rag.components.localLLM:main"
+check2 = "ssnanopore_rag.prepare:main"
 
 [build-system]
 requires = ["hatchling"]
