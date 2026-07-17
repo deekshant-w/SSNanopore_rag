@@ -7,7 +7,6 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict
 
 PROJECT_DIR = Path(__file__).parent.parent.parent
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -59,7 +58,6 @@ def check_keys(data: list[dict[str, str]]):
         # print(item)
         keys.update([item["key"]])
     print(keys)
-    exit()
 
 
 class Paper(BaseModel):
@@ -127,7 +125,7 @@ def dataLoadingUtility(ris_file: Path, output_file: Path):
         json.dump(papers, f, indent=2)
 
 
-def make_data():
+def main():
     dataPath = PROJECT_DIR / "data"
     ris_file = dataPath / "kyle_export.ris"
     data = parse_ris_data(ris_file)
@@ -138,4 +136,4 @@ def make_data():
 
 
 if __name__ == "__main__":
-    make_data()
+    main()

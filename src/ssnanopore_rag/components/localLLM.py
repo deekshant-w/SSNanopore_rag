@@ -2,7 +2,6 @@ import logging
 
 import ollama
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(lineno)d: %(message)s")
 logger = logging.getLogger(__name__)
 
 
