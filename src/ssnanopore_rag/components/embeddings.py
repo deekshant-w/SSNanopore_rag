@@ -38,7 +38,7 @@ class BioBERT(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in tqdm(queries, desc="Embedding queries with BioBERT"):
+        for query in tqdm(queries, desc="Embedding queries with BioBERT", colour="cyan"):
             inputs = self.tokenizer(
                 query,
                 return_tensors="pt",
@@ -68,7 +68,7 @@ class Specter2(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in tqdm(queries, desc="Embedding queries with Specter2"):
+        for query in tqdm(queries, desc="Embedding queries with Specter2", colour="cyan"):
             inputs = self.tokenizer(
                 query,
                 return_tensors="pt",
@@ -93,7 +93,7 @@ class GoogleEmbeddings(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in tqdm(queries, desc="Embedding queries with GoogleEmbeddings"):
+        for query in tqdm(queries, desc="Embedding queries with GoogleEmbeddings", colour="cyan"):
             embeddings.append(
                 self.model.models.embed_content(
                     model=self.model_name,
@@ -120,7 +120,7 @@ class SPLADE(EmbeddingService):
 
     def getEmbeddings(self, queries: list[str]) -> list[list[float]]:
         embeddings = []
-        for query in tqdm(queries, desc="Embedding queries with SPLADE"):
+        for query in tqdm(queries, desc="Embedding queries with SPLADE", colour="cyan"):
             with torch.no_grad():
                 inputs = self.tokenizer(
                     query,
