@@ -114,10 +114,10 @@ def main():
         ],
         functions={"add": lambda a, b: a + b, "subtract": lambda a, b: a - b},
     )
-    res = llm.call(
-        "Call all the tools you have and debug that they are working properly. Always give response after tool calls. And show your work step by step. Use reasoning and internal monologue to answer the question."
-    )
-    # res = llm.call("What is 22+12-11+10-34+99-12+30-30")
+    # res = llm.call(
+    #     "Call all the tools you have and debug that they are working properly. Always give response after tool calls. And show your work step by step. Use reasoning and internal monologue to answer the question."
+    # )
+    res = llm.call("What is 22+12-11+10-34+99-12+30-30")
     print(res)
 
 
