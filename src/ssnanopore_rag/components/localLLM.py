@@ -1,4 +1,5 @@
 import logging
+from copy import deepcopy
 
 import ollama
 from rich.console import Console, Group
@@ -36,7 +37,7 @@ def _thinking_panel(text: str) -> Padding:
     )
 
 
-def render_stream(stream) -> tuple[str, list]:
+def render_stream(stream, display: bool = True) -> tuple[str, list]:
     """Consume an ollama stream: Returns (answer, tool_calls)."""
     thinking, answer, tool_calls = "", "", []
     with Live(console=console, refresh_per_second=16, vertical_overflow="visible") as live:
@@ -52,7 +53,8 @@ def render_stream(stream) -> tuple[str, list]:
                 parts.append(_thinking_panel(thinking))
             if answer:
                 parts.append(Markdown(answer))
-            live.update(Group(*parts))
+            if display:
+                live.update(Group(*parts))
     return answer, tool_calls
 
 
@@ -108,7 +110,7 @@ You are genius scientist. You are able to understand and answer questions relate
         self.functions = functions
         self.MAX_TOOL_CALLS = 50
 
-    def call(self, query: str) -> str:
+    def call(self, query: str, display: bool = True) -> str:
         self.msgs.append({"role": "user", "content": query})
         for _ in range(self.MAX_TOOL_CALLS):
             stream = ollama.chat(
@@ -121,7 +123,7 @@ You are genius scientist. You are able to understand and answer questions relate
                 stream=True,
             )
 
-            answer, tool_calls = render_stream(stream)
+            answer, tool_calls = render_stream(stream, display)
 
             self.msgs.append({"role": "assistant", "content": answer, "tool_calls": tool_calls})
             if not tool_calls:
@@ -141,7 +143,16 @@ You are genius scientist. You are able to understand and answer questions relate
                 logger.warning(self.msgs[-1]["content"])
 
 
-def get_tools_and_functions() -> tuple[list, dict]:
+def single_turn_llm(query: str, llm_instance: LLM, with_history: bool = False) -> str:
+    messages = deepcopy(llm_instance.msgs) if with_history else []
+    messages.append({"role": "user", "content": query})
+    llm = LLM()
+    llm.msgs = messages
+    output = llm.call(query, display=False)
+    return output
+
+
+def debug_get_tools_and_functions() -> tuple[list, dict]:
     tools = [
         {
             "type": "function",
@@ -178,13 +189,16 @@ def get_tools_and_functions() -> tuple[list, dict]:
 
 def main():
     welcome()
-    tools, functions = get_tools_and_functions()
+    tools, functions = debug_get_tools_and_functions()
     llm = LLM(
         tools=tools,
         functions=functions,
     )
     while (query := ask_user().strip()) not in ("", "exit", "quit"):
         llm.call(query)
+
+    print("\n\n" + "=" * console.width)
+    print(single_turn_llm("summarize our conversation", llm, with_history=False))
 
 
 if __name__ == "__main__":
