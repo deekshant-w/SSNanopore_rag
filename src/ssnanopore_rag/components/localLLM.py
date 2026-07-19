@@ -1,8 +1,59 @@
 import logging
 
 import ollama
+from rich.console import Console, Group
+from rich.live import Live
+from rich.markdown import Markdown
+from rich.padding import Padding
+from rich.panel import Panel
+from rich.text import Text
 
 logger = logging.getLogger(__name__)
+
+THEME = "#d79921"
+MUTED = "#7c6f64"
+
+console = Console()
+
+
+def ask_user() -> str:
+    console.print("")
+    console.print("_" * console.width, style=f"dim {THEME}")
+    console.print("")
+    return console.input(Text("You ❯ ", style=f"bold {THEME}"))
+
+
+def _thinking_panel(text: str) -> Padding:
+    return Padding(
+        Panel(
+            Text(text.strip(), style=f"dim italic {MUTED}"),
+            title="thinking",
+            title_align="left",
+            border_style=f"dim {MUTED}",
+            padding=(0, 1),
+        ),
+        (0, 0, 0, 6),
+    )
+
+
+def render_stream(stream) -> tuple[str, list]:
+    """Consume an ollama stream: Returns (answer, tool_calls)."""
+    thinking, answer, tool_calls = "", "", []
+    with Live(console=console, refresh_per_second=16, vertical_overflow="visible") as live:
+        for chunk in stream:
+            if chunk.message.thinking:
+                thinking += chunk.message.thinking
+            if chunk.message.content:
+                answer += chunk.message.content
+            if chunk.message.tool_calls:
+                tool_calls.extend(chunk.message.tool_calls)
+            parts = []
+            if thinking:
+                parts.append(_thinking_panel(thinking))
+            if answer:
+                parts.append(Markdown(answer))
+            live.update(Group(*parts))
+    return answer, tool_calls
 
 
 class LLM:
@@ -48,36 +99,24 @@ You are genius scientist. You are able to understand and answer questions relate
                 stream=True,
             )
 
-            answer = ""
-            tool_calls = []
-            for chunk in stream:
-                if chunk.message.thinking:
-                    print(chunk.message.thinking, end="", flush=True)
-                if chunk.message.content:
-                    print(chunk.message.content, end="", flush=True)
-                    answer += chunk.message.content
-                if chunk.message.tool_calls:
-                    tool_calls.extend(chunk.message.tool_calls)
+            answer, tool_calls = render_stream(stream)
 
             self.msgs.append({"role": "assistant", "content": answer, "tool_calls": tool_calls})
             if not tool_calls:
                 return answer
-            for tool in tool_calls:
-                if tool.function.name in self.functions:
-                    self.msgs.append(
-                        {
-                            "role": "tool",
-                            "content": str(
-                                self.functions[tool.function.name](**tool.function.arguments)
-                            ),
-                        }
-                    )
-                    logger.info(self.msgs[-1]["content"])
-                else:
-                    self.msgs.append({"role": "tool", "content": "Tool not found"})
-                    logger.warn(self.msgs[-1]["content"])
+            self.execute_tool_calls(tool_calls)
 
         return self.msgs[-1]["content"]
+
+    def execute_tool_calls(self, tool_calls: list[dict]) -> str:
+        for tool in tool_calls:
+            if tool.function.name in self.functions:
+                result = str(self.functions[tool.function.name](**tool.function.arguments))
+                self.msgs.append({"role": "tool", "content": result})
+                # logger.debug(self.msgs[-1]["content"])
+            else:
+                self.msgs.append({"role": "tool", "content": "Tool not found"})
+                logger.warning(self.msgs[-1]["content"])
 
 
 def main():
@@ -114,11 +153,8 @@ def main():
         ],
         functions={"add": lambda a, b: a + b, "subtract": lambda a, b: a - b},
     )
-    # res = llm.call(
-    #     "Call all the tools you have and debug that they are working properly. Always give response after tool calls. And show your work step by step. Use reasoning and internal monologue to answer the question."
-    # )
-    res = llm.call("What is 22+12-11+10-34+99-12+30-30")
-    print(res)
+    while (query := ask_user().strip()) not in ("", "exit", "quit"):
+        llm.call(query)
 
 
 if __name__ == "__main__":
