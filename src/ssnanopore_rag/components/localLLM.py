@@ -56,6 +56,28 @@ def render_stream(stream) -> tuple[str, list]:
     return answer, tool_calls
 
 
+def welcome():
+    text = """
+  _                     _   _____            _____
+ | |                   | | |  __ \     /\   / ____|
+ | |     ___   ___ __ _| | | |__) |   /  \ | |  __
+ | |    / _ \ / __/ _` | | |  _  /   / /\ \| | |_ |
+ | |___| (_) | (_| (_| | | | | \ \  / ____ \ |__| |
+ |______\___/ \___\__,_|_| |_|  \_\/_/    \_\_____|
+
+
+    """
+    console.print(
+        Panel(
+            Text(text, style=f"bold {THEME}", justify="left"),
+            title="Welcome to the future!",
+            title_align="left",
+            border_style=f"dim {THEME}",
+            padding=(0, 1),
+        )
+    )
+
+
 class LLM:
     def __init__(
         self,
@@ -119,39 +141,47 @@ You are genius scientist. You are able to understand and answer questions relate
                 logger.warning(self.msgs[-1]["content"])
 
 
+def get_tools_and_functions() -> tuple[list, dict]:
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "add",
+                "description": "Add two numbers",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number"},
+                        "b": {"type": "number"},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "subtract",
+                "description": "Subtract two numbers",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "a": {"type": "number"},
+                        "b": {"type": "number"},
+                    },
+                },
+            },
+        },
+    ]
+    functions = {"add": lambda a, b: a + b, "subtract": lambda a, b: a - b}
+    return tools, functions
+
+
 def main():
+    welcome()
+    tools, functions = get_tools_and_functions()
     llm = LLM(
-        tools=[
-            {
-                "type": "function",
-                "function": {
-                    "name": "add",
-                    "description": "Add two numbers",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "a": {"type": "number"},
-                            "b": {"type": "number"},
-                        },
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "subtract",
-                    "description": "Subtract two numbers",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "a": {"type": "number"},
-                            "b": {"type": "number"},
-                        },
-                    },
-                },
-            },
-        ],
-        functions={"add": lambda a, b: a + b, "subtract": lambda a, b: a - b},
+        tools=tools,
+        functions=functions,
     )
     while (query := ask_user().strip()) not in ("", "exit", "quit"):
         llm.call(query)
