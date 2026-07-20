@@ -70,6 +70,14 @@ select = [
 ]
 ignore = ["E501"]   # line length, formatter handles it
 
+# Import formatting / reorientation. `ruff check --fix` sorts imports (I) and
+# strips unused ones (F401); this section controls how they are grouped.
+[tool.ruff.lint.isort]
+known-first-party = ["ssnanopore_rag"]
+combine-as-imports = true          # merge `from x import a` / `import b` aliases
+force-sort-within-sections = true  # sort `import` and `from` together, alphabetically
+split-on-trailing-comma = true
+
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
