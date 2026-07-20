@@ -92,9 +92,9 @@ class LocalPineconeStore(EmbeddingStore):
     def init_index(self) -> None:
         self.index_name = "<|Uninitialized|>"
 
-    def __del__(self):
-        self.pc.indexes.delete(name=self.index_name)
-        logger.info(f"Deleted index {self.index_name}")
+    # def __del__(self):
+    #     self.pc.indexes.delete(name=self.index_name)
+    #     logger.info(f"Deleted index {self.index_name}")
 
     def wait_for_upsert(self, index, namespace, expected_count, timeout=10000):
         """Block until the index has indexed all records."""
@@ -185,6 +185,14 @@ class PineconeStore_Dense(LocalPineconeStore):
         return self.index.query(
             vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
         )
+
+    def ping(self):
+        try:
+            self.index.describe_index_stats()
+            return True
+        except Exception as e:
+            logger.error(f"Pinecone is not reachable: {e}")
+            return False
 
 
 class PineconeStore_Sparse(LocalPineconeStore):
