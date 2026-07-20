@@ -1,5 +1,5 @@
-import logging
 from copy import deepcopy
+import logging
 
 import ollama
 from rich.console import Console, Group
@@ -134,6 +134,7 @@ You are genius scientist. You are able to understand and answer questions relate
 
     def execute_tool_calls(self, tool_calls: list[dict]) -> str:
         for tool in tool_calls:
+            console.print(f"[bold {THEME}]Running {tool.function.name} tool...[/]", style="dim")
             if tool.function.name in self.functions:
                 result = str(self.functions[tool.function.name](**tool.function.arguments))
                 self.msgs.append({"role": "tool", "content": result})

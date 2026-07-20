@@ -37,11 +37,14 @@ def prepare(path: str):
 def run():
     """Load the tools and start the interactive RAG chat loop."""
     from ssnanopore_rag.components.localLLM import LLM, ask_user, welcome
-    from ssnanopore_rag.tools import get_tools_and_functions
+    from ssnanopore_rag.tools import _approxAnswer, get_tools_and_functions
 
     welcome()
     tools, functions = get_tools_and_functions()
     llm = LLM(tools=tools, functions=functions)
+
+    # Attatch llm instance to approxAnswer tool
+    _approxAnswer.llm = llm
     while (query := ask_user().strip()) not in ("", "exit", "quit"):
         llm.call(query)
 
