@@ -9,8 +9,6 @@ from ssnanopore_rag.misc.logging_setup import setup_logging
 
 app = typer.Typer(help="SSNanopore RAG CLI", no_args_is_help=True)
 
-DOCKER_CMD = "docker compose --profile qdrant --profile pinecone up -d"
-
 
 logger = logging.getLogger(__name__)
 dotenv.load_dotenv()
@@ -55,8 +53,15 @@ def init():
     shutil.rmtree(db_path, ignore_errors=True)
     db_path.mkdir(exist_ok=True)
 
-    if not (_qdrant_up() and _pinecone_up()):
+    if not _qdrant_up():
+        DOCKER_CMD = "docker compose --profile qdrant up"
         typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+
+    if not _pinecone_up():
+        DOCKER_CMD = "docker compose --profile pinecone up"
+        typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+
+    typer.echo("Services are reachable. You can start preparing your database.")
 
 
 def _qdrant_up() -> bool:
