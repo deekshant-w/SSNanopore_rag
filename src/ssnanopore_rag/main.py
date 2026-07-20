@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 
 import dotenv
+from tqdm.auto import trange
 import typer
 
 from ssnanopore_rag.misc.logging_setup import setup_logging
@@ -50,7 +51,14 @@ def init():
     """Clear the vector store, then verify that the docker images are reachable."""
 
     db_path = Path(__file__).parent.parent.parent / "vectorDb"
-    shutil.rmtree(db_path, ignore_errors=True)
+    logger.info(f"Clearing vector store at {db_path}")
+    for _ in trange(20, desc="Attempting to delete..."):
+        shutil.rmtree(db_path, ignore_errors=True)
+        if not db_path.exists():
+            break
+    else:
+        typer.echo(f"Failed to delete vector store at {db_path}")
+    logger.info(f"Vector store at {db_path} deleted.")
     db_path.mkdir(exist_ok=True)
 
     if not _qdrant_up():
