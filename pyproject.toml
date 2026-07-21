@@ -26,7 +26,7 @@ dependencies = [
 [project.scripts]
 main = "ssnanopore_rag.main:main"
 prepare = "ssnanopore_rag.prepare:main"
-check = "ssnanopore_rag.components.embeddingStore:main"
+check = "ssnanopore_rag.tools:main"
 llm = "ssnanopore_rag.components.localLLM:main"
 
 [build-system]

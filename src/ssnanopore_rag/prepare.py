@@ -4,8 +4,8 @@ This module will load the data from the data folder and prepare it to be embedde
 
 import json
 import logging
-import time
 from pathlib import Path
+import time
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -25,7 +25,7 @@ DELETE_POLL_INTERVAL_SECONDS = 1
 DELETE_RETRIES = 10
 DB_PATH = PROJECT_DIR / "data" / "db.json"
 DB_PATH.parent.mkdir(exist_ok=True)
-MAX_COUNT = None
+MAX_DOCUMENTS = None  # None = all
 
 
 def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
@@ -101,10 +101,6 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     """
     logger.info("Starting database preparation...")
 
-    with open(dataFile) as f:
-        data = json.load(f)
-
-    recordsAdded = 0
     # QdrantStore_Rerank = SPLADE | ChromaStore = BioBERT | PineconeStore_Dense = GoogleEmbeddings/Specter2
     embeddingMap = {
         "QdrantStore_Rerank": SPLADE(),
@@ -123,12 +119,17 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     if dbOnly:
         return qdrantStore_Rerank, chromaStore, pineconeStore_Dense
 
-    # Ref DB
+    with open(dataFile) as f:
+        data = json.load(f)
+
+    recordsAdded = 0
+
+    # Reference to original documents
     db = {}
     for record in data:
         if "abstract" not in record or len(record["abstract"]) < 30:
             continue
-        if MAX_COUNT is not None and recordsAdded >= MAX_COUNT:
+        if MAX_DOCUMENTS is not None and recordsAdded >= MAX_DOCUMENTS:
             break
         recordsAdded += 1
         doc_id = str(uuid4())

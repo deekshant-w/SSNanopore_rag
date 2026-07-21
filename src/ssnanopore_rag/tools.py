@@ -1,4 +1,5 @@
 from .components.localLLM import single_turn_llm
+from .prepare import prepareDatabase
 
 
 class _approxAnswer:
@@ -19,7 +20,8 @@ class _approxAnswer:
 approxAnswer = _approxAnswer.call
 
 
-def RAG_Tool(query: str): ...
+def RAG_Tool(query: str):
+    qdrantStore_Rerank, chromaStore, pineconeStore_Dense = prepareDatabase(None, dbOnly=True)
 
 
 def get_tools_and_functions() -> tuple[list[dict], dict]:
@@ -57,3 +59,11 @@ def get_tools_and_functions() -> tuple[list[dict], dict]:
         "RAG_Tool": RAG_Tool,
     }
     return tools, functions
+
+
+def main():
+    RAG_Tool("What is the average read length of Nanopore?")
+
+
+if __name__ == "__main__":
+    main()
