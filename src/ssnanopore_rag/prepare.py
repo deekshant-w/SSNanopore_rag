@@ -25,7 +25,7 @@ DELETE_POLL_INTERVAL_SECONDS = 1
 DELETE_RETRIES = 10
 DB_PATH = PROJECT_DIR / "data" / "db.json"
 DB_PATH.parent.mkdir(exist_ok=True)
-MAX_DOCUMENTS = None  # None = all
+MAX_DOCUMENTS = 20  # None = all
 
 
 def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
@@ -100,7 +100,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
         dbOnly (bool): Whether to only create the database or also embed and store the data.
     """
     logger.info("Starting database preparation...")
-
+    reset = not dbOnly  # If you want generate just the db refs then donot reset the dbs
     # QdrantStore_Rerank = SPLADE | ChromaStore = BioBERT | PineconeStore_Dense = GoogleEmbeddings/Specter2
     embeddingMap = {
         "QdrantStore_Rerank": SPLADE(),
@@ -109,11 +109,11 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     }
 
     qdrantStore_Rerank = QdrantStore_Rerank(
-        sparse_embedding_function=embeddingMap["QdrantStore_Rerank"]
+        sparse_embedding_function=embeddingMap["QdrantStore_Rerank"], reset=reset
     )
-    chromaStore = ChromaStore(embedding_function=embeddingMap["ChromaStore"])
+    chromaStore = ChromaStore(embedding_function=embeddingMap["ChromaStore"], reset=reset)
     pineconeStore_Dense = PineconeStore_Dense(
-        embedding_function=embeddingMap["PineconeStore_Dense"], dimension=768
+        embedding_function=embeddingMap["PineconeStore_Dense"], dimension=768, reset=reset
     )
 
     if dbOnly:

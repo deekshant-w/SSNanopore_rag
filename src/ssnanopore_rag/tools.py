@@ -20,8 +20,27 @@ class _approxAnswer:
 approxAnswer = _approxAnswer.call
 
 
-def RAG_Tool(query: str):
-    qdrantStore_Rerank, chromaStore, pineconeStore_Dense = prepareDatabase(None, dbOnly=True)
+class _RAG_Tool:
+    def __init__(self):
+        self.qdrantStore_Rerank, self.chromaStore, self.pineconeStore_Dense = prepareDatabase(
+            None, dbOnly=True
+        )
+        self.qCount = 10
+        self.cCount = 10
+        self.pCount = 10
+
+    def call(self, query: str):
+        qPicks = self.qdrantStore_Rerank.query([query], n_results=self.qCount)
+        cPick = self.chromaStore.query([query], n_results=self.cCount)
+        pPick = self.pineconeStore_Dense.query([query], n_results=self.pCount)
+
+        print(f"QdrantStore_Rerank: {qPicks}")
+        print(f"ChromaStore: {cPick}")
+        print(f"PineconeStore_Dense: {pPick}")
+
+
+__RAG_Tool = _RAG_Tool()
+RAG_Tool = __RAG_Tool.call
 
 
 def get_tools_and_functions() -> tuple[list[dict], dict]:

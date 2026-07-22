@@ -39,9 +39,9 @@ def run():
     from ssnanopore_rag.components.localLLM import LLM, ask_user, welcome
     from ssnanopore_rag.tools import _approxAnswer, get_tools_and_functions
 
-    welcome()
     tools, functions = get_tools_and_functions()
     llm = LLM(tools=tools, functions=functions)
+    welcome()
 
     # Attatch llm instance to approxAnswer tool
     _approxAnswer.llm = llm

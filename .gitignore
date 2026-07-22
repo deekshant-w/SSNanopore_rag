@@ -17,3 +17,4 @@ data/
 .vscode/launch.json
 examples/
 /src/vectorDb
+vectorDb

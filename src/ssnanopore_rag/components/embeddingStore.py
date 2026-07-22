@@ -1,9 +1,9 @@
-import logging
-import shutil
-import time
 from abc import ABCMeta, abstractmethod
 from collections.abc import Callable, Mapping
+import logging
 from pathlib import Path
+import shutil
+import time
 from typing import Any
 
 import chromadb
@@ -16,7 +16,7 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from tqdm.auto import trange
 
 logger = logging.getLogger(__name__)
-PROJECT_DIR = Path(__file__).parent.parent.parent
+PROJECT_DIR = Path(__file__).parent.parent.parent.parent
 
 
 class EmbeddingStore(metaclass=ABCMeta):
@@ -34,12 +34,13 @@ class ChromaStore(EmbeddingStore):
         self,
         db_name: str = "chroma",
         collection_name: str = "nanopore",
+        reset: bool = True,
         embedding_function: Callable | None = None,
     ) -> None:
         logger.info("Initializing ChromaStore")
         db_path = PROJECT_DIR / "vectorDb" / db_name
         # delete and wait for the directory to be deleted
-        if db_path.exists():
+        if reset and db_path.exists():
             logger.info(f"Deleting vector DB {db_path}")
             shutil.rmtree(db_path)
             while db_path.exists():
@@ -109,7 +110,7 @@ class LocalPineconeStore(EmbeddingStore):
             if current_count >= expected_count:
                 return
             print(
-                f"Vectors upserted: {current_count/expected_count*100:.2f}% : {current_count}/{expected_count}"
+                f"Vectors upserted: {current_count / expected_count * 100:.2f}% : {current_count}/{expected_count}"
             )
             time.sleep(2)
         raise TimeoutError(f"Still only {current_count} vectors after {timeout}s")
@@ -125,6 +126,7 @@ class PineconeStore_Dense(LocalPineconeStore):
         namespace: str = "",
         pinecone_args: Mapping[str, Any] = {},
         index_args: Mapping[str, Any] = {},
+        reset: bool = True,
     ) -> None:
         """
         Pinecone -> index (dense) -> multiple namespaces -> multiple vectors
@@ -136,9 +138,12 @@ class PineconeStore_Dense(LocalPineconeStore):
         self.metric = metric
         self.index_args = index_args
         self.namespace = namespace
+        self.reset = reset
         super().__init__(**pinecone_args)
 
     def init_index(self) -> None:
+        if not self.reset:
+            return
         if self.pc.has_index(self.index_name):
             logger.info(f"Deleting index {self.index_name}")
             self.pc.indexes.delete(name=self.index_name)
@@ -204,6 +209,7 @@ class PineconeStore_Sparse(LocalPineconeStore):
         namespace: str = "",
         pinecone_args: Mapping[str, Any] = {},
         index_args: Mapping[str, Any] = {},
+        reset: bool = True,
     ) -> None:
         raise NotImplementedError(
             "Sparse encoding in Pinecone is not working - https://github.com/pinecone-io/python-sdk/issues/679"
@@ -213,9 +219,12 @@ class PineconeStore_Sparse(LocalPineconeStore):
         self.metric = metric
         self.index_args = index_args
         self.namespace = namespace
+        self.reset = reset
         super().__init__(**pinecone_args)
 
     def init_index(self) -> None:
+        if not self.reset:
+            return
         if not self.pc.has_index(self.index_name):
             logger.info(f"Creating index {self.index_name}")
             self.pc.indexes.create(
@@ -257,16 +266,17 @@ class PineconeStore_Sparse(LocalPineconeStore):
 
 
 class LocalQdrantStore(EmbeddingStore):
-    def __init__(self, collection_name: str = "nanopore") -> None:
+    def __init__(self, collection_name: str, reset: bool) -> None:
         logger.info("Initializing %s", type(self).__name__)
         # client = QdrantClient(path=PROJECT_DIR / "data" / db_name)
         client = QdrantClient(url="http://localhost:6333")
         # client = QdrantClient(":memory:")
         self.client = client
         self.collection_name = collection_name
-        logger.info("Deleting collection %s", self.collection_name)
-        self.client.delete_collection(collection_name=self.collection_name)
-        self.init_collection()
+        if reset:
+            logger.info("Deleting collection %s", self.collection_name)
+            self.client.delete_collection(collection_name=self.collection_name)
+            self.init_collection()
         logger.info("%s initialized", type(self).__name__)
 
     @abstractmethod
@@ -282,11 +292,12 @@ class QdrantStore_Dense(LocalQdrantStore):
         collection_name: str = "nanopore",
         vector_size: int = 128,
         metric: str = Distance.COSINE,
+        reset: bool = True,
     ) -> None:
         self.embedding_function = embedding_function
         self.vector_size = vector_size
         self.metric = metric
-        super().__init__(collection_name=collection_name)
+        super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
         self.client.create_collection(
@@ -327,9 +338,10 @@ class QdrantStore_Sparse(LocalQdrantStore):
         self,
         embedding_function: Callable,
         collection_name: str = "nanopore",
+        reset: bool = True,
     ) -> None:
         self.embedding_function = embedding_function
-        super().__init__(collection_name=collection_name)
+        super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
         self.client.create_collection(
@@ -383,12 +395,13 @@ class QdrantStore_Hybrid(LocalQdrantStore):
         collection_name: str = "nanopore",
         vector_size: int = 128,
         metric: str = Distance.COSINE,
+        reset: bool = True,
     ) -> None:
         self.dense_embedding_function = dense_embedding_function
         self.sparse_embedding_function = sparse_embedding_function
         self.vector_size = vector_size
         self.metric = metric
-        super().__init__(collection_name=collection_name)
+        super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
         self.client.create_collection(
@@ -453,9 +466,10 @@ class QdrantStore_BM25(LocalQdrantStore):
         self,
         collection_name: str = "nanopore",
         model: str = "Qdrant/bm25",
+        reset: bool = True,
     ) -> None:
         self.model = model
-        super().__init__(collection_name=collection_name)
+        super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
         self.client.create_collection(
@@ -507,6 +521,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
         reranker_model: str = "answerdotai/answerai-colbert-small-v1",  # "colbert-ir/colbertv2.0",
         reranker_dim: int = 96,
         prefetch_limit: int = 20,
+        reset: bool = True,
     ) -> None:
         self.dense_embedding_model = dense_embedding_model
         self.sparse_embedding_function = sparse_embedding_function
@@ -516,7 +531,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
         self.reranker_model = reranker_model
         self.reranker_dim = reranker_dim
         self.prefetch_limit = prefetch_limit
-        super().__init__(collection_name=collection_name)
+        super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
         self.client.create_collection(
