@@ -69,7 +69,9 @@ class ChromaStore(EmbeddingStore):
 
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         return self.collection.query(
-            query_embeddings=self.embedding_function.getEmbeddings(query_texts), n_results=n_results
+            query_embeddings=self.embedding_function.getEmbeddings(query_texts),
+            n_results=n_results,
+            include=["metadatas"],
         )
 
 
@@ -188,7 +190,11 @@ class PineconeStore_Dense(LocalPineconeStore):
     def query(self, query_texts: list[str], n_results: int = 5) -> dict:
         query_embeddings = self.embedding_function.getEmbeddings(query_texts)
         return self.index.query(
-            vector=query_embeddings[0], top_k=n_results, namespace=self.namespace
+            vector=query_embeddings[0],
+            top_k=n_results,
+            namespace=self.namespace,
+            include_metadata=True,
+            include_values=False,
         )
 
     def ping(self):
@@ -329,7 +335,7 @@ class QdrantStore_Dense(LocalQdrantStore):
             collection_name=self.collection_name,
             query=query_embeddings[0],
             limit=n_results,
-            with_payload=True,
+            with_payload=["doc_id"],
         )
 
 
@@ -383,7 +389,7 @@ class QdrantStore_Sparse(LocalQdrantStore):
             ),
             using="sparse",
             limit=n_results,
-            with_payload=True,
+            with_payload=["doc_id"],
         )
 
 
@@ -453,7 +459,7 @@ class QdrantStore_Hybrid(LocalQdrantStore):
             ],
             query=models.FusionQuery(fusion=models.Fusion.RRF),
             limit=n_results,
-            with_payload=True,
+            with_payload=["doc_id"],
         )
 
 
@@ -501,7 +507,7 @@ class QdrantStore_BM25(LocalQdrantStore):
             query=models.Document(text=query_texts[0], model=self.model),
             using="bm25",
             limit=n_results,
-            with_payload=True,
+            with_payload=["doc_id"],
         )
 
 
@@ -614,7 +620,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
             query=models.Document(text=query_text[0], model=self.reranker_model),
             using="reranker",
             limit=n_results,
-            with_payload=True,
+            with_payload=["doc_id"],
         )
 
 

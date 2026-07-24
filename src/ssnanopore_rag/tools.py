@@ -25,18 +25,26 @@ class _RAG_Tool:
         self.qdrantStore_Rerank, self.chromaStore, self.pineconeStore_Dense = prepareDatabase(
             None, dbOnly=True
         )
-        self.qCount = 10
-        self.cCount = 10
-        self.pCount = 10
+        self.count = 2
+        self.qCount = self.count
+        self.cCount = self.count
+        self.pCount = self.count
 
     def call(self, query: str):
         qPicks = self.qdrantStore_Rerank.query([query], n_results=self.qCount)
-        cPick = self.chromaStore.query([query], n_results=self.cCount)
-        pPick = self.pineconeStore_Dense.query([query], n_results=self.pCount)
+        qDocIds = [i.payload["doc_id"] for i in qPicks.points]
+        # print(f"QdrantStore_Rerank: {qPicks}")
+        print(f"{qDocIds=}")
 
-        print(f"QdrantStore_Rerank: {qPicks}")
-        print(f"ChromaStore: {cPick}")
-        print(f"PineconeStore_Dense: {pPick}")
+        cPicks = self.chromaStore.query([query], n_results=self.cCount)
+        cDocIds = [i["doc_id"] for i in cPicks["metadatas"][0]]
+        # print(f"ChromaStore: {cPicks}")
+        print(f"{cDocIds=}")
+
+        pPicks = self.pineconeStore_Dense.query([query], n_results=self.pCount)
+        pDocIds = [i.metadata["doc_id"] for i in pPicks.matches]
+        # print(f"PineconeStore_Dense: {pPicks}")
+        print(f"{pDocIds=}")
 
 
 __RAG_Tool = _RAG_Tool()

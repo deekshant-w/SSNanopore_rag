@@ -146,11 +146,11 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     q_ids: list[str] = []
     for k, v in tqdm(db.items(), desc="Adding data to QdrantStore_Rerank", colour="green"):
         q_documents.append(v["abstract"])
-        q_metadatas.append({"title": v["title"], "doc_id": k})
+        q_metadatas.append({"doc_id": k})
         q_ids.append(str(uuid4()))
 
         q_documents.append(v["title"] + " \n " + v["abstract"])
-        q_metadatas.append({"title": v["title"], "doc_id": k})
+        q_metadatas.append({"doc_id": k})
         q_ids.append(str(uuid4()))
     qdrantStore_Rerank.add_embeddings(documents=q_documents, metadata=q_metadatas, ids=q_ids)
 
@@ -160,7 +160,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     c_ids: list[str] = []
     for k, v in tqdm(db.items(), desc="Adding data to ChromaStore", colour="green"):
         c_documents.append(v["abstract"])
-        c_metadatas.append({"title": v["title"], "doc_id": k})
+        c_metadatas.append({"doc_id": k})
         c_ids.append(k)
     chromaStore.add_embeddings(documents=c_documents, metadata=c_metadatas, ids=c_ids)
 
@@ -170,11 +170,11 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     p_ids: list[str] = []
     for k, v in tqdm(db.items(), desc="Adding data to PineconeStore_Dense", colour="green"):
         p_documents.append(v["abstract"])
-        p_metadatas.append({"title": v["title"], "doc_id": k})
+        p_metadatas.append({"doc_id": k})
         p_ids.append(str(uuid4()))
 
         p_documents.append(v["title"])
-        p_metadatas.append({"title": v["title"], "doc_id": k})
+        p_metadatas.append({"doc_id": k})
         p_ids.append(str(uuid4()))
     pineconeStore_Dense.add_embeddings(documents=p_documents, metadata=p_metadatas, ids=p_ids)
 
