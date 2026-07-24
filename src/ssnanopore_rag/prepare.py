@@ -135,7 +135,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
         doc_id = str(uuid4())
         db[doc_id] = _DB(title=record["title"], abstract=record["abstract"]).model_dump()
     with open(DB_PATH, "w") as f:
-        json.dump(db, f)
+        json.dump(db, f, indent=4)
     logger.info(f"Data preparation completed. Added {recordsAdded} records.")
     logger.info(f"Adding data to {DB_PATH}...")
 

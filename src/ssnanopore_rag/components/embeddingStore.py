@@ -526,7 +526,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
         bm25_model: str = "qdrant/bm25",
         reranker_model: str = "answerdotai/answerai-colbert-small-v1",  # "colbert-ir/colbertv2.0",
         reranker_dim: int = 96,
-        prefetch_limit: int = 20,
+        prefetch_limit: int = 50,
         reset: bool = True,
     ) -> None:
         self.dense_embedding_model = dense_embedding_model
