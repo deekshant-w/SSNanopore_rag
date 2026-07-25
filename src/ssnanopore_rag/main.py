@@ -3,6 +3,7 @@ from pathlib import Path
 import shutil
 
 import dotenv
+from rich.pretty import pprint
 from tqdm.auto import trange
 import typer
 
@@ -17,7 +18,12 @@ setup_logging()
 
 
 @app.command()
-def prepare(path: str):
+def prepare(
+    path: str = typer.Argument(..., help="Path to the .json or .ris input file to process."),
+    max_documents: int | None = typer.Argument(
+        None, help="Maximum number of documents to process.", show_default=True
+    ),
+):
     """Prepare a .json or .ris file, then embed and store it. Raises on any other format."""
 
     from ssnanopore_rag.prepare import prepareDatabase, prepareJSON
@@ -30,22 +36,30 @@ def prepare(path: str):
             dataFile = prepareJSON(p)
         case other:
             raise typer.BadParameter(f"Unsupported format {other!r}: provide a .json or .ris file.")
-    prepareDatabase(dataFile)
+    prepareDatabase(dataFile, max_documents=max_documents)
 
 
 @app.command()
-def run():
+def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use from ollama.")):
     """Load the tools and start the interactive RAG chat loop."""
     from ssnanopore_rag.components.localLLM import LLM, ask_user, welcome
     from ssnanopore_rag.tools import _approxAnswer, get_tools_and_functions
 
     tools, functions = get_tools_and_functions()
-    llm = LLM(tools=tools, functions=functions)
+    llm = LLM(model, tools=tools, functions=functions)
     welcome()
 
     # Attatch llm instance to approxAnswer tool
     _approxAnswer.llm = llm
     while (query := ask_user().strip()) not in ("", "exit", "quit"):
+        command = query.lower().strip()
+        match command:
+            case "debug":
+                pprint(llm.msgs)
+                continue
+            case "tools":
+                pprint(tools)
+                continue
         llm.call(query)
 
 
