@@ -41,7 +41,7 @@ class _RAG_Tool:
         self.pCount = self.count
 
         self.qWeight = 10
-        self.cWeight = 5
+        self.cWeight = 5 * 1.5  # as others have 2 copies of documents
         self.pWeight = 2
         self.k = 60
 
@@ -51,10 +51,15 @@ class _RAG_Tool:
         self.rerankerName = "cross-encoder/ms-marco-MiniLM-L-6-v2"
         self.reranker = CrossEncoder(self.rerankerName)
 
+        with open(DB_PATH) as f:
+            self.db = json.load(f)
+
     def call(self, query: str, question: str):
         logger.debug(f"RAG tool called with query: {query}")
         logger.info(f"RAG tool called with question: {question}")
-        qPicks = self.qdrantStore_Rerank.query([query], n_results=self.qCount)
+        qPicks = self.qdrantStore_Rerank.query(
+            [query], n_results=self.qCount, individual_limit=self.qCount // 1.5
+        )
         qDocIds = [i.payload["doc_id"] for i in qPicks.points]
 
         cPicks = self.chromaStore.query([query], n_results=self.cCount)
@@ -99,12 +104,10 @@ Based on the above context, answer the following question - {question}
         return [doc for doc, _ in ranked[: self.selectedTopN]]
 
     def retrieve_documents(self, docIds: list[str]):
-        with open(DB_PATH) as f:
-            db = json.load(f)
-            data = []
-            for docId in docIds:
-                data.append(f"Title: {db[docId]['title']}\nAbstract: {db[docId]['abstract']}")
-            return data
+        data = []
+        for docId in docIds:
+            data.append(f"Title: {self.db[docId]['title']}\nAbstract: {self.db[docId]['abstract']}")
+        return data
 
 
 __RAG_Tool = _RAG_Tool()
