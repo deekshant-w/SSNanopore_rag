@@ -40,10 +40,10 @@ def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
     """
 
     logger.info("Prepare data to embed and store...")
-    if not dataPath.exists():
-        raise FileNotFoundError(f"Data path not found: {dataPath}")
     if not dataPath.is_absolute():
         dataPath = PROJECT_DIR / "data" / dataPath
+    if not dataPath.exists():
+        raise FileNotFoundError(f"Data path not found: {dataPath}")
     if not (dataPath.exists() and dataPath.is_file()):
         raise FileNotFoundError(f"Data path not found: {dataPath}")
     logger.info(f"Loading data from {dataPath}")
@@ -60,7 +60,7 @@ def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
     if outputFile.exists():
         choice = input(f"Output file {outputFile} already exists. Overwrite? (y/n): ")
         if choice.lower().strip() != "y":
-            logger.info(f"Output file {outputFile} already exists. Overwrite? (y/n): ")
+            logger.info(f"File {outputFile} already exists. Skipping.")
             return
         else:
             logger.info(f"Deleting existing file {outputFile}")
@@ -127,6 +127,8 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False, max_documents: int = N
     db = {}
     for record in data:
         if "abstract" not in record or len(record["abstract"]) < 30:
+            continue
+        if "title" not in record or len(record["title"]) < 30:
             continue
         if max_documents is not None and recordsAdded >= max_documents:
             break
