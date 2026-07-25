@@ -25,7 +25,6 @@ DELETE_POLL_INTERVAL_SECONDS = 1
 DELETE_RETRIES = 10
 DB_PATH = PROJECT_DIR / "data" / "db.json"
 DB_PATH.parent.mkdir(exist_ok=True)
-MAX_DOCUMENTS = 20  # None = all
 
 
 def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
@@ -91,7 +90,7 @@ class _DB(BaseModel):
     abstract: str
 
 
-def prepareDatabase(dataFile: Path, dbOnly: bool = False):
+def prepareDatabase(dataFile: Path, dbOnly: bool = False, max_documents: int = None):
     """
     Create all the databases from the data file.
 
@@ -129,7 +128,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     for record in data:
         if "abstract" not in record or len(record["abstract"]) < 30:
             continue
-        if MAX_DOCUMENTS is not None and recordsAdded >= MAX_DOCUMENTS:
+        if max_documents is not None and recordsAdded >= max_documents:
             break
         recordsAdded += 1
         doc_id = str(uuid4())
@@ -144,7 +143,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     q_documents: list[str] = []
     q_metadatas: list[dict] = []
     q_ids: list[str] = []
-    for k, v in tqdm(db.items(), desc="Adding data to QdrantStore_Rerank", colour="green"):
+    for k, v in tqdm(db.items(), desc="Preparing data for QdrantStore_Rerank", colour="green"):
         q_documents.append(v["abstract"])
         q_metadatas.append({"doc_id": k})
         q_ids.append(str(uuid4()))
@@ -158,7 +157,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     c_documents: list[str] = []
     c_metadatas: list[dict] = []
     c_ids: list[str] = []
-    for k, v in tqdm(db.items(), desc="Adding data to ChromaStore", colour="green"):
+    for k, v in tqdm(db.items(), desc="Preparing data for ChromaStore", colour="green"):
         c_documents.append(v["abstract"])
         c_metadatas.append({"doc_id": k})
         c_ids.append(k)
@@ -168,7 +167,7 @@ def prepareDatabase(dataFile: Path, dbOnly: bool = False):
     p_documents: list[str] = []
     p_metadatas: list[dict] = []
     p_ids: list[str] = []
-    for k, v in tqdm(db.items(), desc="Adding data to PineconeStore_Dense", colour="green"):
+    for k, v in tqdm(db.items(), desc="Preparing data for PineconeStore_Dense", colour="green"):
         p_documents.append(v["abstract"])
         p_metadatas.append({"doc_id": k})
         p_ids.append(str(uuid4()))
