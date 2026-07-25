@@ -1,11 +1,11 @@
-import logging
 from abc import ABCMeta, abstractmethod
+import logging
 
-import torch
 from adapters import AutoAdapterModel
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
+import torch
 from tqdm.auto import tqdm
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
@@ -46,8 +46,11 @@ class BioBERT(EmbeddingService):
                 truncation=True,
                 max_length=512,
             )
-            outputs = self.model(**inputs)
-            embeddings.append(outputs.last_hidden_state[0, 0].detach().numpy().tolist())
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            mask = inputs["attention_mask"].unsqueeze(-1)
+            pooled = (outputs.last_hidden_state * mask).sum(1) / mask.sum(1)
+            embeddings.append(pooled[0].detach().numpy().tolist())
         return embeddings
 
 
@@ -76,7 +79,8 @@ class Specter2(EmbeddingService):
                 truncation=True,
                 max_length=self.embedding_size,
             )
-            outputs = self.model(**inputs)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
             embeddings.append(outputs.last_hidden_state[0, 0].detach().numpy().tolist())
         return embeddings
 
