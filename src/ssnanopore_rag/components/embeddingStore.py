@@ -42,11 +42,14 @@ class ChromaStore(EmbeddingStore):
         # delete and wait for the directory to be deleted
         if reset and db_path.exists():
             logger.info(f"Deleting vector DB {db_path}")
-            shutil.rmtree(db_path)
-            while db_path.exists():
+            for _ in trange(20, desc="Waiting for vector DB to be deleted..."):
+                shutil.rmtree(db_path, ignore_errors=True)
+                if not db_path.exists():
+                    break
                 time.sleep(1)
-                logger.info(f"Waiting for vector DB {db_path} to be deleted...")
-        self.client = chromadb.PersistentClient(path=db_path)
+            else:
+                raise TimeoutError(f"Failed to delete vector DB at {db_path} after 20 attempts")
+        self.client = chromadb.PersistentClient(path=str(db_path))
         # self.client = chromadb.Client()
         self.embedding_function = embedding_function
         self.collection = self.client.get_or_create_collection(
@@ -141,7 +144,7 @@ class PineconeStore_Dense(LocalPineconeStore):
         self.index_args = index_args
         self.namespace = namespace
         self.reset = reset
-        super().__init__(**pinecone_args)
+        super().__init__(pinecone_args)
 
     def init_index(self) -> None:
         if not self.reset:
@@ -526,7 +529,6 @@ class QdrantStore_Rerank(LocalQdrantStore):
         bm25_model: str = "qdrant/bm25",
         reranker_model: str = "answerdotai/answerai-colbert-small-v1",  # "colbert-ir/colbertv2.0",
         reranker_dim: int = 96,
-        prefetch_limit: int = 50,
         reset: bool = True,
     ) -> None:
         self.dense_embedding_model = dense_embedding_model
@@ -536,7 +538,6 @@ class QdrantStore_Rerank(LocalQdrantStore):
         self.bm25_model = bm25_model
         self.reranker_model = reranker_model
         self.reranker_dim = reranker_dim
-        self.prefetch_limit = prefetch_limit
         super().__init__(collection_name=collection_name, reset=reset)
 
     def init_collection(self) -> None:
@@ -568,6 +569,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
     ) -> None:
         # All at once, makes the system OOM
         sparse_embeddings = self.sparse_embedding_function.getEmbeddings(documents)
+        operation_info = None
         for start in trange(0, len(ids), batch_size, desc="Upserting to QdrantStore_Rerank"):
             end = min(start + batch_size, len(ids))
             points = [
@@ -589,9 +591,13 @@ class QdrantStore_Rerank(LocalQdrantStore):
                 for i in range(start, end)
             ]
             operation_info = self.client.upsert(self.collection_name, points=points, wait=True)
-        logger.info(f"Upsert operation completed: {operation_info}")
 
-    def query(self, query_texts: list[str], n_results: int = 5) -> dict:
+        if operation_info:
+            logger.info(f"Upsert operation completed: {operation_info}")
+        else:
+            logger.error("Upsert operation failed")
+
+    def query(self, query_texts: list[str], n_results: int = 5, individual_limit: int = 5) -> dict:
         query_text = query_texts
         sparse_query = self.sparse_embedding_function.getEmbeddings(query_texts)[0]
 
@@ -601,7 +607,7 @@ class QdrantStore_Rerank(LocalQdrantStore):
                 models.Prefetch(
                     query=models.Document(text=query_text[0], model=self.dense_embedding_model),
                     using="dense",
-                    limit=self.prefetch_limit,
+                    limit=individual_limit,
                 ),
                 models.Prefetch(
                     query=models.SparseVector(
@@ -609,12 +615,12 @@ class QdrantStore_Rerank(LocalQdrantStore):
                         values=sparse_query["values"],
                     ),
                     using="sparse",
-                    limit=self.prefetch_limit,
+                    limit=individual_limit,
                 ),
                 models.Prefetch(
                     query=models.Document(text=query_text[0], model=self.bm25_model),
                     using="bm25",
-                    limit=self.prefetch_limit,
+                    limit=individual_limit,
                 ),
             ],
             query=models.Document(text=query_text[0], model=self.reranker_model),
