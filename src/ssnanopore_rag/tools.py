@@ -22,7 +22,9 @@ class _approxAnswer:
     def call(query: str) -> str:
         self = _approxAnswer
         text = self.template.format(query=query)
-        return single_turn_llm(text, self.llm, True)
+        result = single_turn_llm(text, self.llm, True)
+        logger.debug(f"Approximate answer: {result}")
+        return result
 
 
 approxAnswer = _approxAnswer.call
@@ -49,7 +51,9 @@ class _RAG_Tool:
         self.rerankerName = "cross-encoder/ms-marco-MiniLM-L-6-v2"
         self.reranker = CrossEncoder(self.rerankerName)
 
-    def call(self, query: str):
+    def call(self, query: str, question: str):
+        logger.debug(f"RAG tool called with query: {query}")
+        logger.info(f"RAG tool called with question: {question}")
         qPicks = self.qdrantStore_Rerank.query([query], n_results=self.qCount)
         qDocIds = [i.payload["doc_id"] for i in qPicks.points]
 
@@ -75,14 +79,16 @@ class _RAG_Tool:
         )
         docs = self.retrieve_documents(docIds)
         rerankedDocs = self.rerank(query, docs)
-        return self.generateAnswer(rerankedDocs)
+        return self.generateAnswer(rerankedDocs, question)
 
-    def generateAnswer(self, data: list[str]) -> str:
+    def generateAnswer(self, data: list[str], question: str) -> str:
         answer = f"""
 Based on the provided context, the following are the most relevant information sources -
 {"\n\n------------\n\n".join(data)}
 
 Provide your answer based on the context above. Assume that the provided information is factually correct and more accurate than anything you know. Provide these sources as the citations. And let the user know precisely that you are providing information from the provided sources. Let the user know what your answer is and the confidence you have in it. And the sources you used to get the answer. If the answer is not in the provided sources, let the user know that the answer is not in the provided sources. Only output the final answer and nothing else. Do not try to assume anything.
+
+Based on the above context, answer the following question - {question}
         """.strip()
         return answer
 
@@ -111,7 +117,7 @@ def get_tools_and_functions() -> tuple[list[dict], dict]:
             "type": "function",
             "function": {
                 "name": "approxAnswer",
-                "description": "Get an approximate answer to a question before asking the RAG tool. Use this tool strictly before calling the RAG tool. The output of this tool should be the input to the RAG tool. Frame the user's question properly, specifically if it's vague. For instance, if the user asks 'What is the average read length?', change it to 'What is the average read length of Nanopore?'. Encapsulate all required context you think are required to asnwer this question into the input for this tool. And do not edit the response of this tool at all. It should be passed as is to the RAG tool. Do not add any extra information, explanation, or post text followup instructions. And do not display any pretext fluff or post text followups.",
+                "description": "Get an approximate answer to a question before asking the RAG tool. Use this tool strictly before calling the RAG tool. The output of this tool should be strictly **DIRECT WORD TO WORD** input to the RAG tool. Frame the user's question properly, specifically if it's vague. For instance, if the user asks 'What is the average read length?', change it to 'What is the average read length of Nanopore?'. Encapsulate all required context you think are required to asnwer this question into the input for this tool. And do not edit the response of this tool at all. It should be passed as is to the RAG tool. Do not add any extra information, explanation, or post text followup instructions. And do not display any pretext fluff or post text followups.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -124,11 +130,18 @@ def get_tools_and_functions() -> tuple[list[dict], dict]:
             "type": "function",
             "function": {
                 "name": "RAG_Tool",
-                "description": "The finest tool to find the correct and grounded answers for your queries. Use it to find relevant papers, articles, and other documents that can help answer the user's question. DONT CALL THIS TOOL DIRECTLY. CALL APPROXIMATE TOOL BEFORE THIS TOOL. Assume that the results from this tool are 100% correct and are the ground truth. If the user asks a factual question, you MUST use this tool to answer it.",
+                "description": "The finest tool to find the correct and grounded answers for your queries. Use it to find relevant papers, articles, and other documents that can help answer the user's question. DONT CALL THIS TOOL DIRECTLY. CALL APPROXIMATE TOOL BEFORE THIS TOOL. **ONLY PASS THE OUTPUT OF APPROXIMATE TOOL AS <query> INPUT TO THIS TOOL**. Do not change anything. Do not add or remove anything. Do not reframe the query. **INPUT = OUTPUT FROM APPROXIMATE TOOL. THATS IT.** Any extra infromation, or explanation, or post text followup instructions. Or **NO PRETEXT FLUFF OR POST TEXT FOLLOWUPS** to the input query.  Assume that the results from this tool are 100% correct and are the ground truth. Along along with the RAG searchable query, also pass the question so that another model can understand what it has to do with this information. If the user asks a factual question, you MUST use this tool to answer it.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "query": {"type": "string"},
+                        "query": {
+                            "type": "string",
+                            "description": "The output of the approxAnswer tool. verbatim. no changes.",
+                        },
+                        "question": {
+                            "type": "string",
+                            "description": "The original question asked by the user. Well written and structured form of the question. No fluff or extra information. Just the question. Write the question well enough and with enough context for the next model to understand what it has to do with this information returned by the RAG tool.",
+                        },
                     },
                 },
             },
@@ -143,7 +156,7 @@ def get_tools_and_functions() -> tuple[list[dict], dict]:
 
 
 def main():
-    RAG_Tool("What is the average read length of Nanopore?")
+    print(RAG_Tool("What is the average read length of Nanopore?"))
 
 
 if __name__ == "__main__":
