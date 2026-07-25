@@ -51,7 +51,7 @@ def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use fr
 
     # Attatch llm instance to approxAnswer tool
     _approxAnswer.llm = llm
-    while (query := ask_user().strip()) not in ("", "exit", "quit"):
+    while (query := ask_user().strip()) not in ("", "quit"):
         command = query.lower().strip()
         match command:
             case "debug":
@@ -60,6 +60,11 @@ def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use fr
             case "tools":
                 pprint(tools)
                 continue
+            case "clear":
+                llm.msgs.clear()
+                continue
+            case "quit" | "exit" | "kill":
+                break
         llm.call(query)
 
 
@@ -78,15 +83,22 @@ def init():
     logger.info(f"Vector store at {db_path} deleted.")
     db_path.mkdir(exist_ok=True)
 
+    success = True
+
     if not _qdrant_up():
         DOCKER_CMD = "docker compose --profile qdrant up"
         typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+        success = False
 
     if not _pinecone_up():
         DOCKER_CMD = "docker compose --profile pinecone up"
         typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+        success = False
 
-    typer.echo("Services are reachable. You can start preparing your database.")
+    if success:
+        typer.echo("Services are reachable. You can start preparing your database.")
+    else:
+        typer.echo("Some services are not reachable. Please start them and try again.")
 
 
 def _qdrant_up() -> bool:
@@ -118,15 +130,17 @@ def _qdrant_up() -> bool:
 
 
 def _pinecone_up() -> bool:
-    from pinecone.errors.exceptions import PineconeConnectionError
+    from pinecone.errors.exceptions import PineconeError
 
     from ssnanopore_rag.components.embeddingStore import PineconeStore_Dense
 
     try:
-        PineconeStore_Dense(embedding_function=lambda _: _, dimension=100).ping()
+        PineconeStore_Dense(
+            embedding_function=lambda _: _, dimension=100, index_name="testing", reset=False
+        ).ping()
         return True
-    except PineconeConnectionError:
-        logger.error("Pinecone is not reachable")
+    except PineconeError as e:
+        logger.error(f"Pinecone is not reachable: {e}")
         return False
 
 
