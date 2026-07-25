@@ -112,9 +112,9 @@ You are genius scientist. You are able to understand and answer questions relate
         self.keep_alive = "10m"
         self.tools = tools
         self.functions = functions
-        self.MAX_TOOL_CALLS = 50
+        self.MAX_TOOL_CALLS = 10
 
-    def call(self, query: str, display: bool = True) -> str:
+    def call(self, query: str, display: bool = True):
         self.msgs.append({"role": "user", "content": query})
         for _ in range(self.MAX_TOOL_CALLS):
             stream = ollama.chat(
@@ -134,9 +134,7 @@ You are genius scientist. You are able to understand and answer questions relate
                 return answer
             self.execute_tool_calls(tool_calls)
 
-        return self.msgs[-1]["content"]
-
-    def execute_tool_calls(self, tool_calls: list[dict]) -> str:
+    def execute_tool_calls(self, tool_calls: list[dict]):
         for tool in tool_calls:
             console.print(f"[bold {THEME}]Running {tool.function.name} tool...[/]", style="dim")
             if tool.function.name in self.functions:
@@ -151,7 +149,7 @@ You are genius scientist. You are able to understand and answer questions relate
 def single_turn_llm(query: str, llm_instance: LLM, with_history: bool = False) -> str:
     messages = deepcopy(llm_instance.msgs) if with_history else []
     messages.append({"role": "user", "content": query})
-    llm = LLM()
+    llm = LLM(model=llm_instance.model)
     llm.msgs = messages
     output = llm.call(query, display=False)
     return output
