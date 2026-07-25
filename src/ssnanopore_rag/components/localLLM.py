@@ -40,12 +40,16 @@ def _thinking_panel(text: str) -> Padding:
 def render_stream(stream, display: bool = True) -> tuple[str, list]:
     """Consume an ollama stream: Returns (answer, tool_calls)."""
     thinking, answer, tool_calls = "", "", []
+    answerStarted = False
     with Live(console=console, refresh_per_second=16, vertical_overflow="visible") as live:
         for chunk in stream:
             if chunk.message.thinking:
                 thinking += chunk.message.thinking
             if chunk.message.content:
                 answer += chunk.message.content
+                if not answerStarted:
+                    answerStarted = True
+                    console.print("\n" + "_" * console.width, style=f"dim {THEME}")
             if chunk.message.tool_calls:
                 tool_calls.extend(chunk.message.tool_calls)
             parts = []
@@ -59,7 +63,7 @@ def render_stream(stream, display: bool = True) -> tuple[str, list]:
 
 
 def welcome():
-    text = """
+    text = r"""
   _                     _   _____            _____
  | |                   | | |  __ \     /\   / ____|
  | |     ___   ___ __ _| | | |__) |   /  \ | |  __
