@@ -61,7 +61,7 @@ def prepareJSON(dataPath: Path, outputFile: str = "prepared_data.json"):
         choice = input(f"Output file {outputFile} already exists. Overwrite? (y/n): ")
         if choice.lower().strip() != "y":
             logger.info(f"File {outputFile} already exists. Skipping.")
-            return
+            return outputFile
         else:
             logger.info(f"Deleting existing file {outputFile}")
             for attempt in range(DELETE_RETRIES):
