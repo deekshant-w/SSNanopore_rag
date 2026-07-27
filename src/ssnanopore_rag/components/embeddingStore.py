@@ -104,6 +104,8 @@ class LocalPineconeStore(EmbeddingStore):
 
     def wait_for_upsert(self, index, namespace, expected_count, timeout=10000):
         """Block until the index has indexed all records."""
+        if not expected_count:
+            raise ValueError("expected_count must be greater than 0")
         start = time.time()
         while time.time() - start < timeout:
             stats = index.describe_index_stats()
@@ -114,7 +116,7 @@ class LocalPineconeStore(EmbeddingStore):
             )
             if current_count >= expected_count:
                 return
-            print(
+            logger.info(
                 f"Vectors upserted: {current_count / expected_count * 100:.2f}% : {current_count}/{expected_count}"
             )
             time.sleep(2)
