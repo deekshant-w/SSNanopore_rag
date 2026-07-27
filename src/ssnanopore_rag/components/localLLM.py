@@ -134,25 +134,41 @@ You are genius scientist. You are able to understand and answer questions relate
                 return answer
             self.execute_tool_calls(tool_calls)
 
+        for message in reversed(self.msgs):
+            if message["role"] == "assistant":
+                return message["content"]
+        raise ValueError("No answer found")
+
     def execute_tool_calls(self, tool_calls: list[dict]):
         for tool in tool_calls:
             console.print(f"[bold {THEME}]Running {tool.function.name} tool...[/]", style="dim")
             if tool.function.name in self.functions:
-                result = str(self.functions[tool.function.name](**tool.function.arguments))
-                self.msgs.append({"role": "tool", "content": result})
+                try:
+                    result = str(self.functions[tool.function.name](**tool.function.arguments))
+                except Exception as e:
+                    result = f"Error: {e}"
+                self.msgs.append(
+                    {"role": "tool", "content": result, "tool_name": tool.function.name}
+                )
                 # logger.debug(self.msgs[-1]["content"])
             else:
                 self.msgs.append({"role": "tool", "content": "Tool not found"})
                 logger.warning(self.msgs[-1]["content"])
 
 
+NO_TOOL_DIRECTIVE = """
+For this turn only, you have NO tools available. Ignore any earlier instruction that calls
+a tool mandatory - none can be called here. Answer directly from your own knowledge.
+""".strip()
+
+
 def single_turn_llm(query: str, llm_instance: LLM, with_history: bool = False) -> str:
-    messages = deepcopy(llm_instance.msgs) if with_history else []
-    messages.append({"role": "user", "content": query})
     llm = LLM(model=llm_instance.model)
-    llm.msgs = messages
-    output = llm.call(query, display=False)
-    return output
+    if with_history:
+        # Replaces the base system prompt with the caller's, which already contains one.
+        llm.msgs = deepcopy(llm_instance.msgs)
+    llm.msgs.append({"role": "system", "content": NO_TOOL_DIRECTIVE})
+    return llm.call(query, display=False)
 
 
 def debug_get_tools_and_functions() -> tuple[list, dict]:
