@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 import shutil
+import time
 
 import dotenv
 from rich.pretty import pprint
@@ -51,20 +52,24 @@ def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use fr
 
     # Attatch llm instance to approxAnswer tool
     _approxAnswer.llm = llm
-    while (query := ask_user().strip()) not in ("", "quit"):
-        command = query.lower().strip()
-        match command:
-            case "debug":
-                pprint(llm.msgs)
-                continue
-            case "tools":
-                pprint(tools)
-                continue
-            case "clear":
-                llm.msgs.clear()
-                continue
-            case "quit" | "exit" | "kill":
-                break
+    while (query := ask_user().strip()) != "":
+        if query.startswith("/"):
+            match query[1:].lower():
+                case "debug":
+                    pprint(llm.msgs)
+                case "tools":
+                    pprint(tools)
+                case "clear":
+                    del llm.msgs[1:]  # Keep the system prompt
+                    typer.echo("Conversation cleared.")
+                case "quit" | "exit" | "kill":
+                    break
+                case other:
+                    typer.echo(
+                        f"Unknown command '/{other}'. Available: "
+                        "/debug, /tools, /clear, /quit (or a blank line to exit)."
+                    )
+            continue
         llm.call(query)
 
 
@@ -76,6 +81,7 @@ def init():
     logger.info(f"Clearing vector store at {db_path}")
     for _ in trange(20, desc="Attempting to delete..."):
         shutil.rmtree(db_path, ignore_errors=True)
+        time.sleep(1)
         if not db_path.exists():
             break
     else:
@@ -105,13 +111,15 @@ def _qdrant_up() -> bool:
     from json import JSONDecodeError
 
     import requests
-    from requests.exceptions import ConnectionError
 
     url = "http://localhost:6333/collections"
     try:
-        result = requests.get(url)
-    except ConnectionError as e:
-        logger.error(f"Qdrant is not reachable. ConnectionError: {e}")
+        result = requests.get(url, timeout=10)
+    except requests.RequestException as e:
+        logger.error(f"Qdrant is not reachable. RequestException: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Qdrant is not reachable. Exception: {e}")
         return False
     if result.status_code != 200:
         logger.error(f"Qdrant is not reachable. Status code: {result.status_code}")
@@ -130,18 +138,11 @@ def _qdrant_up() -> bool:
 
 
 def _pinecone_up() -> bool:
-    from pinecone.errors.exceptions import PineconeError
-
     from ssnanopore_rag.components.embeddingStore import PineconeStore_Dense
 
-    try:
-        PineconeStore_Dense(
-            embedding_function=lambda _: _, dimension=100, index_name="testing", reset=False
-        ).ping()
-        return True
-    except PineconeError as e:
-        logger.error(f"Pinecone is not reachable: {e}")
-        return False
+    return PineconeStore_Dense(
+        embedding_function=lambda _: _, dimension=100, index_name="testing", reset=False
+    ).ping()
 
 
 def main():
