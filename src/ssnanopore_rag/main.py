@@ -48,7 +48,7 @@ def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use fr
 
     tools, functions = get_tools_and_functions()
     llm = LLM(model, tools=tools, functions=functions)
-    welcome()
+    welcome(llm.model)
 
     # Attatch llm instance to approxAnswer tool
     _approxAnswer.llm = llm
@@ -89,22 +89,26 @@ def init():
     logger.info(f"Vector store at {db_path} deleted.")
     db_path.mkdir(exist_ok=True)
 
-    success = True
+    qdrantSuccess = True
+    pineconeSuccess = True
 
     if not _qdrant_up():
-        DOCKER_CMD = "docker compose --profile qdrant up"
-        typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
-        success = False
+        qdrantSuccess = False
 
     if not _pinecone_up():
-        DOCKER_CMD = "docker compose --profile pinecone up"
-        typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
-        success = False
+        pineconeSuccess = False
 
-    if success:
+    if qdrantSuccess and pineconeSuccess:
         typer.echo("Services are reachable. You can start preparing your database.")
     else:
         typer.echo("Some services are not reachable. Please start them and try again.")
+        if not qdrantSuccess:
+            DOCKER_CMD = "docker compose --profile qdrant up"
+            typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+        if not pineconeSuccess:
+            DOCKER_CMD = "docker compose --profile pinecone up"
+            typer.echo(f"Containers not reachable. Start them with:\n    {DOCKER_CMD}")
+        raise typer.Exit(code=1)
 
 
 def _qdrant_up() -> bool:
@@ -140,9 +144,13 @@ def _qdrant_up() -> bool:
 def _pinecone_up() -> bool:
     from ssnanopore_rag.components.embeddingStore import PineconeStore_Dense
 
-    return PineconeStore_Dense(
-        embedding_function=lambda _: _, dimension=100, index_name="testing", reset=False
-    ).ping()
+    try:
+        return PineconeStore_Dense(
+            embedding_function=lambda _: _, dimension=100, index_name="testing", reset=True
+        ).ping()
+    except Exception as e:
+        logger.error(f"Pinecone is not reachable. Exception: {e}")
+        return False
 
 
 def main():

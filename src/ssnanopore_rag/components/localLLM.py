@@ -62,7 +62,7 @@ def render_stream(stream, display: bool = True) -> tuple[str, list]:
     return answer, tool_calls
 
 
-def welcome():
+def welcome(model: str | None = None):
     text = r"""
   _                     _   _____            _____
  | |                   | | |  __ \     /\   / ____|
@@ -75,7 +75,10 @@ def welcome():
     """
     console.print(
         Panel(
-            Text(text, style=f"bold {THEME}", justify="left"),
+            Group(
+                Text(text, style=f"bold {THEME}", justify="left"),
+                Text(f" Running on model: {model}", style=f"italic {MUTED}"),
+            ),
             title="Welcome to the future!",
             title_align="left",
             border_style=f"dim {THEME}",
