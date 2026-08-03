@@ -24,7 +24,8 @@ class _approxAnswer:
         text = cls.template.format(query=query)
         if not cls.llm:
             raise ValueError("LLM not initialized. Call prepareDatabase first.")
-        result = single_turn_llm(text, cls.llm, True)
+        result = single_turn_llm(text, cls.llm, False)
+        result = f"Context Query for RAG: {result} <NOW CALL RAG_TOOL>"
         logger.debug(f"Approximate answer: {result}")
         return result
 
@@ -58,7 +59,7 @@ class _RAG_Tool:
 
     def call(self, query: str, question: str):
         logger.debug(f"RAG tool called with query: {query}")
-        logger.info(f"RAG tool called with question: {question}")
+        logger.debug(f"RAG tool called with question: {question}")
         qPicks = self.qdrantStore_Rerank.query(
             [query], n_results=self.qCount, individual_limit=int(self.qCount / 1.5)
         )
@@ -93,7 +94,7 @@ class _RAG_Tool:
 Based on the provided context, the following are the most relevant information sources -
 {"\n\n------------\n\n".join(data)}
 
-Provide your answer based on the context above. Assume that the provided information is factually correct and more accurate than anything you know. Provide these sources as the citations. And let the user know precisely that you are providing information from the provided sources. Let the user know what your answer is and the confidence you have in it. And the sources you used to get the answer. If the answer is not in the provided sources, let the user know that the answer is not in the provided sources. Only output the final answer and nothing else. Do not try to assume anything.
+Provide your answer based on the context above. Assume that the provided information is factually correct and more accurate than anything you know. Provide these sources as perfectly placed and useful citations. And let the user know precisely that you are providing information from the provided sources. Let the user know what your answer is and the confidence you have in it. And at the end <Precisely and correcly> always mention the sources you used to get the answer. The user cannot see the internal tool context so always write the sources you used to get the answer clearly with numbers as citations like [1], [2], [3], etc. At the end of the answer draw a horizontal line and add a references section listing all the sources used with those matching numers - eg. [1] title - "title1", [2] title - "title2", etc. If the answer is not in the provided sources, let the user know that the answer is not in the provided sources.
 
 Based on the above context, answer the following question - {question}
         """.strip()
@@ -163,16 +164,3 @@ def get_tools_and_functions() -> tuple[list[dict], dict]:
         "RAG_Tool": RAG_Tool,
     }
     return tools, functions
-
-
-def main():
-    question = "What is the average read length of Nanopore?"
-    query = approxAnswer(question)
-    # from .components.localLLM import LLM
-
-    # llm = LLM(*get_tools_and_functions())
-    print(RAG_Tool(query, question))
-
-
-if __name__ == "__main__":
-    main()
