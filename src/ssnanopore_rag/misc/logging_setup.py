@@ -25,19 +25,22 @@ def setup_logging(level: int = LOG_LEVEL) -> None:
         from rich.logging import RichHandler
 
         handler = RichHandler(
-            rich_tracebacks=True,  # colored, source-highlighted tracebacks
-            tracebacks_show_locals=True,  # show local vars in tracebacks
-            markup=True,  # allow [red]...[/] markup inside log messages
-            show_path=True,  # clickable file:line
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            markup=True,
+            show_path=True,
             log_time_format=f"[{DATE_FORMAT}]",
         )
         handler.setFormatter(logging.Formatter(CONSOLE_FORMAT))
 
-    root = logging.getLogger()
-    root.setLevel(level)
-    root.handlers.clear()
-    root.addHandler(handler)
+    app_logger = logging.getLogger("ssnanopore_rag")
+    app_logger.setLevel(level)
+    app_logger.handlers.clear()
+    app_logger.addHandler(handler)
+    app_logger.propagate = False
 
-    # Quiet noisy third-party loggers so our INFO lines stand out.
-    for noisy in ("httpx", "httpcore", "urllib3", "grpc", "chromadb"):
-        logging.getLogger(noisy).setLevel(logging.WARNING)
+    # Disable logging for all imported packages
+    root = logging.getLogger()
+    root.setLevel(logging.CRITICAL)
+    root.handlers.clear()
+    root.addHandler(logging.NullHandler())
