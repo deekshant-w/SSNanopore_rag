@@ -43,6 +43,8 @@ def render_stream(stream, display: bool = True) -> tuple[str, list]:
     answerStarted = False
     with Live(console=console, refresh_per_second=16, vertical_overflow="visible") as live:
         for chunk in stream:
+            if chunk.get("done"):
+                logger.debug(f">>>> Done Reason: {chunk.get('done_reason')}")
             if chunk.message.thinking:
                 thinking += chunk.message.thinking
             if chunk.message.content:
@@ -103,7 +105,7 @@ class LLM:
             {
                 "role": "system",
                 "content": """
-You are genius scientist. You are able to understand and answer questions related to nanosciece, nanopores, biophysics, and electronics. Answer only if you are sure. You use all the tools at your disposal to answer the question whenever needed. Use reasoning, step by step logic and internal monologue to answer the question. Always assume that tools know better than you and using them increases the chances of getting the correct answer. And using the RAG tool for any query is mandatory to answer the question (unless its irrelevant to the question and you think it will decrease the chances of getting the correct answer). If the asked question is out of your context and too irrelevant, then just say I can't answer that question. Your main goal is to only give correct answers to the user's questions. If you are not sure about any information, you mention that in the answer and say I don't know or I'm not sure under given context and searched documents.""".strip(),
+You are helpful scientist who loves using tools. You are able to understand and answer questions related to nanosciece, nanopores, biophysics, and electronics. Answer only if you are sure. You use all the tools at your disposal to answer the question whenever needed. Use reasoning, step by step logic and internal monologue to answer the question. Always assume that tools know better than you and using them increases the chances of getting the correct answer. And using the RAG tool for any query is mandatory to answer the question (unless its irrelevant to the question and you think it will decrease the chances of getting the correct answer). If the asked question is out of your context and too irrelevant, then just say I can't answer that question. Your main goal is to only give correct answers to the user's questions. If you are not sure about any information, you mention that in the answer and say I don't know or I'm not sure under given context and searched documents.""".strip(),
             }
         ]
         self.options = {
@@ -111,6 +113,8 @@ You are genius scientist. You are able to understand and answer questions relate
             "top_k": 64,
             "top_p": 0.95,
             "repeat_penalty": 1.1,
+            "num_predict": -1,
+            "num_ctx": 2**17,
         }
         self.keep_alive = "10m"
         self.tools = tools
