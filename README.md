@@ -235,6 +235,7 @@ Starts the interactive chat loop.
 | Queries fail after a Docker restart | Compose declares no volumes, so recreating a container drops its data. Rerun `prepare`. |
 | Model answers without citing anything | It skipped the retrieval tool. Try a model with stronger tool-calling adherence. |
 | First run stalls before answering | Embedding and reranker weights are downloading from HuggingFace. One-time cost. |
+| `NO_SUCHFILE` loading a `.onnx` model | fastembed caches BM25/ColBERT/MiniLM weights in the system temp directory, which the OS is free to clear — leaving a cache that looks present but is empty. Clear it and it re-downloads on the next run: `Remove-Item -Recurse -Force "$env:TEMP\fastembed_cache"` (PowerShell), or `rm -rf /tmp/fastembed_cache` elsewhere. |
 | Ingestion keeps far fewer papers than expected | Entries without both a title and an abstract are dropped — RIS exports are often abstract-free. |
 
 ---
