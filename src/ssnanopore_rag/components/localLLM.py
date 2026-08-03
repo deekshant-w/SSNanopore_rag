@@ -172,7 +172,6 @@ a tool mandatory - none can be called here. Answer directly from your own knowle
 def single_turn_llm(query: str, llm_instance: LLM, with_history: bool = False) -> str:
     llm = LLM(model=llm_instance.model)
     if with_history:
-        # Replaces the base system prompt with the caller's, which already contains one.
         llm.msgs = deepcopy(llm_instance.msgs)
     llm.msgs.append({"role": "system", "content": NO_TOOL_DIRECTIVE})
     return llm.call(query, display=False)

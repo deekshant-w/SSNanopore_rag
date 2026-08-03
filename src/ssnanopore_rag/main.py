@@ -41,7 +41,7 @@ def prepare(
 
 
 @app.command()
-def run(model: str = typer.Argument("gemma4:e2b", help="LLM model name to use from ollama.")):
+def run(model: str = typer.Argument("gemma4", help="LLM model name to use from ollama.")):
     """Load the tools and start the interactive RAG chat loop."""
     from ssnanopore_rag.components.localLLM import LLM, ask_user, welcome
     from ssnanopore_rag.tools import _approxAnswer, get_tools_and_functions
