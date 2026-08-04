@@ -130,7 +130,7 @@ compared on the same corpus without rewriting the pipeline:
 
 | Strategy            | What it does                                                     |
 | ------------------- | ---------------------------------------------------------------- |
-| **Dense**           | Semantic search over neural embeddings.                          |
+| **Dense**           | Semantic search                          |
 | **Sparse (SPLADE)** | Learned sparse lexical retrieval.                                |
 | **BM25**            | Classic IDF-weighted lexical search.                             |
 | **Hybrid**          | Dense + sparse, fused with RRF.                                  |
