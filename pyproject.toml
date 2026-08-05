@@ -1,7 +1,7 @@
 [project]
-name = "ssnanopore-rag"
+name = "fusion-rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "A fully local RAG pipeline: HyDE query expansion, three vector stores fused by reciprocal rank, and cross-encoder reranking."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

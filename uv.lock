@@ -713,6 +713,71 @@ wheels = [
 ]
 
 [[package]]
+name = "fusion-rag"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "adapters" },
+    { name = "chromadb" },
+    { name = "dotenv" },
+    { name = "fastembed" },
+    { name = "google-genai" },
+    { name = "hf-xet" },
+    { name = "ollama" },
+    { name = "onnxruntime" },
+    { name = "pinecone" },
+    { name = "pydantic" },
+    { name = "qdrant-client", extra = ["fastembed"] },
+    { name = "requests" },
+    { name = "rich" },
+    { name = "rispy" },
+    { name = "sentence-transformers" },
+    { name = "snowballstemmer" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "black" },
+    { name = "pre-commit" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "adapters", specifier = ">=1.3.0" },
+    { name = "chromadb", specifier = ">=1.5.9" },
+    { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "fastembed", specifier = ">=0.8.0" },
+    { name = "google-genai", specifier = ">=2.6.0" },
+    { name = "hf-xet", specifier = ">=1.5.0" },
+    { name = "ollama", specifier = ">=0.6.2" },
+    { name = "onnxruntime", specifier = ">=1.26.0" },
+    { name = "pinecone", extras = ["grpc"], specifier = ">=9.0.1" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "qdrant-client", extras = ["fastembed"], specifier = ">=1.18.0" },
+    { name = "requests", specifier = ">=2.34.2" },
+    { name = "rich", specifier = ">=15.0.0" },
+    { name = "rispy", specifier = ">=0.10.0" },
+    { name = "sentence-transformers", specifier = ">=5.6.1" },
+    { name = "snowballstemmer", specifier = ">=3.1.0" },
+    { name = "torch", specifier = ">=2.12.0", index = "https://download.pytorch.org/whl/cu130" },
+    { name = "torchvision", specifier = ">=0.27.0", index = "https://download.pytorch.org/whl/cu130" },
+    { name = "tqdm", specifier = ">=4.67.3" },
+    { name = "typer", specifier = ">=0.26.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "black", specifier = ">=26.5.1" },
+    { name = "pre-commit", specifier = ">=4.6.0" },
+    { name = "ruff", specifier = ">=0.15.20" },
+]
+
+[[package]]
 name = "google-auth"
 version = "2.53.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2738,71 +2803,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/63/ee/67eef9600338e245ad7838230969a34c823ddbdbccc5e1fc43cd75b55bc9/snowballstemmer-3.1.0.tar.gz", hash = "sha256:fd9e34526b23340cd23ffea6c9f9760974ecc2c2ac9e1d81401443ccdb2a801f", size = 122523, upload-time = "2026-05-24T19:04:19.691Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/49/83/ddbf4533c62dd32667ef1238952abef155f3d3391f5be69a352ad1638a42/snowballstemmer-3.1.0-py3-none-any.whl", hash = "sha256:17e6d1da216aa07db6dad37139ea70cf13c4b2e9a096f6e64a9648fc657d3154", size = 104550, upload-time = "2026-05-24T19:04:18.026Z" },
-]
-
-[[package]]
-name = "ssnanopore-rag"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "adapters" },
-    { name = "chromadb" },
-    { name = "dotenv" },
-    { name = "fastembed" },
-    { name = "google-genai" },
-    { name = "hf-xet" },
-    { name = "ollama" },
-    { name = "onnxruntime" },
-    { name = "pinecone" },
-    { name = "pydantic" },
-    { name = "qdrant-client", extra = ["fastembed"] },
-    { name = "requests" },
-    { name = "rich" },
-    { name = "rispy" },
-    { name = "sentence-transformers" },
-    { name = "snowballstemmer" },
-    { name = "torch" },
-    { name = "torchvision" },
-    { name = "tqdm" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "black" },
-    { name = "pre-commit" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "adapters", specifier = ">=1.3.0" },
-    { name = "chromadb", specifier = ">=1.5.9" },
-    { name = "dotenv", specifier = ">=0.9.9" },
-    { name = "fastembed", specifier = ">=0.8.0" },
-    { name = "google-genai", specifier = ">=2.6.0" },
-    { name = "hf-xet", specifier = ">=1.5.0" },
-    { name = "ollama", specifier = ">=0.6.2" },
-    { name = "onnxruntime", specifier = ">=1.26.0" },
-    { name = "pinecone", extras = ["grpc"], specifier = ">=9.0.1" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "qdrant-client", extras = ["fastembed"], specifier = ">=1.18.0" },
-    { name = "requests", specifier = ">=2.34.2" },
-    { name = "rich", specifier = ">=15.0.0" },
-    { name = "rispy", specifier = ">=0.10.0" },
-    { name = "sentence-transformers", specifier = ">=5.6.1" },
-    { name = "snowballstemmer", specifier = ">=3.1.0" },
-    { name = "torch", specifier = ">=2.12.0", index = "https://download.pytorch.org/whl/cu130" },
-    { name = "torchvision", specifier = ">=0.27.0", index = "https://download.pytorch.org/whl/cu130" },
-    { name = "tqdm", specifier = ">=4.67.3" },
-    { name = "typer", specifier = ">=0.26.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "black", specifier = ">=26.5.1" },
-    { name = "pre-commit", specifier = ">=4.6.0" },
-    { name = "ruff", specifier = ">=0.15.20" },
 ]
 
 [[package]]
