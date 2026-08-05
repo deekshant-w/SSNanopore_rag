@@ -17,9 +17,9 @@ opt-in and never required.
 
 | Stage            | Local default                                 | Optional cloud |
 | ---------------- | --------------------------------------------- | -------------- |
-| **Embeddings**   | SPECTER2, BioBERT, SPLADE, MiniLM (on-device) | Google Gemini  |
+| **Embeddings**   | SPECTER2, BioBERT, SPLADE, MiniLM, BM25       | Google Gemini  |
 | **Vector store** | Qdrant + ChromaDB + Pinecone, all self-hosted | none           |
-| **Reranking**    | BM25, ColBERT, cross-encoder (on-device)      | none           |
+| **Reranking**    | ColBERT, cross-encoder                        | none           |
 | **LLM**          | Any tool-calling model on Ollama              | none           |
 
 - **Private.** Documents and questions never leave the machine.
