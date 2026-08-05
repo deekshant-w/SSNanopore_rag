@@ -1,4 +1,4 @@
-# Local RAG Pipeline
+# Fusion RAG
 
 > A **fully local** Retrieval-Augmented Generation system. Point it at your own document
 > collection, ask questions in a chat loop, and get answers grounded in what you indexed, with

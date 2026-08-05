@@ -189,6 +189,6 @@ if __name__ == "__main__":
 
     logger = logging.getLogger(__name__)
     setup_logging()
-    logger.info("Starting SSNanopore RAG pipeline...")
+    logger.info("Starting Fusion RAG pipeline...")
 
     main()

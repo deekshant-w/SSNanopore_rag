@@ -10,7 +10,7 @@ import typer
 
 from ssnanopore_rag.misc.logging_setup import setup_logging
 
-app = typer.Typer(help="SSNanopore RAG CLI", no_args_is_help=True)
+app = typer.Typer(help="Fusion RAG CLI", no_args_is_help=True)
 
 
 logger = logging.getLogger(__name__)
